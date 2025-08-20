@@ -123,12 +123,7 @@ namespace Screenshot_Organiser.Platforms.Android
                 // Simple folder selection with predefined options
                 var items = new[]
                 {
-            "📁 Browse Folders",
-            "📷 Pictures",
-            "📱 Downloads",
-            "📄 Documents",
-            "🎵 Music",
-            "🎬 Movies"
+            "📁 Browse Folders"
         };
 
                 var builder = new AlertDialog.Builder(this);
@@ -190,7 +185,6 @@ namespace Screenshot_Organiser.Platforms.Android
                 intent.PutExtra("action", "pick_folder");
 
                 StartActivity(intent);
-                ShowToast("📂 Select folder in the app");
             }
             catch (Exception ex)
             {
@@ -229,7 +223,9 @@ namespace Screenshot_Organiser.Platforms.Android
                 }
 
                 // Move the file
-                File.Move(screenshotPath, destinationPath);
+                File.Copy(screenshotPath, destinationPath, overwrite: true);
+                File.Delete(screenshotPath);
+
 
                 var folderName = IOPath.GetFileName(destinationFolder);
                 ShowToast($"✅ Screenshot moved to {folderName}");
@@ -240,31 +236,6 @@ namespace Screenshot_Organiser.Platforms.Android
             {
                 ShowToast($"❌ Failed to move: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"❌ Move error: {ex.Message}");
-            }
-        }
-
-
-
-        private async Task SaveScreenshot(string sourcePath, string destinationFolder)
-        {
-            try
-            {
-                Directory.CreateDirectory(destinationFolder);
-
-                var fileName = IOPath.GetFileName(sourcePath);
-                var destinationPath = IOPath.Combine(destinationFolder, fileName);
-
-                // Wait for file to be fully written
-                await Task.Delay(1000);
-
-                File.Copy(sourcePath, destinationPath, true);
-                File.Delete(sourcePath);
-
-                ShowToast($"Screenshot saved to {IOPath.GetFileName(destinationFolder)}");
-            }
-            catch (Exception ex)
-            {
-                ShowToast($"Failed to save: {ex.Message}");
             }
         }
 

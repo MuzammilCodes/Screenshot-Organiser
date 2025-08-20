@@ -69,8 +69,10 @@ namespace Screenshot_Organiser
                 var fileName = Path.GetFileName(sourcePath);
                 var destinationPath = Path.Combine(destinationFolder, fileName);
 
-                File.Move(sourcePath, destinationPath);
+                File.Copy(sourcePath, destinationPath, overwrite: true);
+                File.Delete(sourcePath);
                 Android.Widget.Toast.MakeText(this, $"✅ Screenshot moved to selected folder", Android.Widget.ToastLength.Long)?.Show();
+                FinishAffinity();
             }
             catch (Exception ex)
             {
