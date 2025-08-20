@@ -42,28 +42,21 @@ namespace Screenshot_Organiser.Platforms.Android
             _instance = this;
             _windowManager = GetSystemService(WindowService)?.JavaCast<IWindowManager>();
             CreateNotificationChannel();
+
+            // Pre-create notification to ensure it's ready
+            try
+            {
+                var notification = CreateNotification();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error creating notification: {ex.Message}");
+            }
         }
 
         public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId)
         {
-            try
-            {
-                if (AndroidOS.Build.VERSION.SdkInt >= AndroidOS.BuildVersionCodes.Q)
-                {
-                    StartForeground(NOTIFICATION_ID, CreateNotification(), ForegroundService.TypeSpecialUse);
-                }
-                else
-                {
-                    StartForeground(NOTIFICATION_ID, CreateNotification());
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error starting foreground service: {ex.Message}");
-                // Fallback: try without foreground service
-                return StartCommandResult.Sticky;
-            }
-
+            // Don't start as foreground service - run as regular service
             return StartCommandResult.Sticky;
         }
 
@@ -127,38 +120,53 @@ namespace Screenshot_Organiser.Platforms.Android
         {
             try
             {
-                // Create folder selection dialog
-                var folderDialog = new AlertDialog.Builder(this)
-                    .SetTitle("Select Folder")
-                    .SetMessage("Choose where to save the screenshot")
-                    .SetPositiveButton("Browse Folders", async (s, e) =>
-                    {
-                        await OpenFolderPicker(screenshotPath);
-                    })
-                    .SetNeutralButton("Pictures Folder", async (s, e) =>
-                    {
-                        var picturesPath = IOPath.Combine(
-                            AndroidEnvironment.ExternalStorageDirectory?.AbsolutePath ?? "/storage/emulated/0",
-                            "Pictures");
-                        await SaveScreenshot(screenshotPath, picturesPath);
-                    })
-                    .SetNegativeButton("Cancel", (s, e) =>
-                    {
-                        ShowToast("Screenshot remains in original location");
-                    })
-                    .Create();
+                // Simple folder selection with predefined options
+                var items = new[]
+                {
+            "📁 Browse Folders",
+            "📷 Pictures",
+            "📱 Downloads",
+            "📄 Documents",
+            "🎵 Music",
+            "🎬 Movies"
+        };
 
-                // Make dialog appear as overlay
+                var builder = new AlertDialog.Builder(this);
+                builder.SetTitle("Select Folder");
+                builder.SetItems(items, async (sender, args) =>
+                {
+                    switch (args.Which)
+                    {
+                        case 0: // Browse Folders
+                            await OpenSystemFilePicker(screenshotPath);
+                            break;
+                        case 1: // Pictures
+                            await MoveToFolder(screenshotPath, "/storage/emulated/0/Pictures");
+                            break;
+                        case 2: // Downloads
+                            await MoveToFolder(screenshotPath, "/storage/emulated/0/Download");
+                            break;
+                        case 3: // Documents
+                            await MoveToFolder(screenshotPath, "/storage/emulated/0/Documents");
+                            break;
+                        case 4: // Music
+                            await MoveToFolder(screenshotPath, "/storage/emulated/0/Music");
+                            break;
+                        case 5: // Movies
+                            await MoveToFolder(screenshotPath, "/storage/emulated/0/Movies");
+                            break;
+                    }
+                });
+
+                var dialog = builder.Create();
+
+                // Make it overlay
                 if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
                 {
-                    folderDialog.Window?.SetType(WindowManagerTypes.ApplicationOverlay);
-                }
-                else
-                {
-                    folderDialog.Window?.SetType(WindowManagerTypes.SystemAlert);
+                    dialog.Window?.SetType(WindowManagerTypes.ApplicationOverlay);
                 }
 
-                folderDialog.Show();
+                dialog.Show();
             }
             catch (Exception ex)
             {
@@ -166,24 +174,86 @@ namespace Screenshot_Organiser.Platforms.Android
             }
         }
 
-        private async Task OpenFolderPicker(string screenshotPath)
+
+        private async Task OpenSystemFilePicker(string screenshotPath)
         {
             try
             {
+                // Create folder picker intent (not file picker)
                 var intent = new Intent(Intent.ActionOpenDocumentTree);
                 intent.AddFlags(ActivityFlags.NewTask);
+                intent.PutExtra(Intent.ExtraLocalOnly, true);
 
-                // Store screenshot path for later use
+                // Store screenshot path for later
                 var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
                 prefs?.Edit()?.PutString("pending_screenshot", screenshotPath)?.Apply();
 
                 StartActivity(intent);
+                ShowToast("📂 Select a folder, then grant access");
+
+                // Fallback after 10 seconds if no folder selected
+                await Task.Delay(3000);
+                var pendingScreenshot = prefs?.GetString("pending_screenshot", null);
+                if (!string.IsNullOrEmpty(pendingScreenshot) && File.Exists(pendingScreenshot))
+                {
+                    await MoveToFolder(pendingScreenshot, "/storage/emulated/0/Download");
+                    ShowToast("📥 Timeout - Moved to Downloads folder");
+                    prefs?.Edit()?.Remove("pending_screenshot")?.Apply();
+                }
             }
             catch (Exception ex)
             {
-                ShowToast($"Failed to open folder picker: {ex.Message}");
+                // Fallback to Downloads folder
+                await MoveToFolder(screenshotPath, "/storage/emulated/0/Download");
+                ShowToast("📥 Moved to Downloads folder");
             }
         }
+
+        private async Task MoveToFolder(string screenshotPath, string destinationFolder)
+        {
+            try
+            {
+                // Wait a moment for file to be ready
+                await Task.Delay(500);
+
+                if (!File.Exists(screenshotPath))
+                {
+                    ShowToast("❌ Screenshot file not found");
+                    return;
+                }
+
+                // Create destination folder
+                Directory.CreateDirectory(destinationFolder);
+
+                var fileName = IOPath.GetFileName(screenshotPath);
+                var destinationPath = IOPath.Combine(destinationFolder, fileName);
+
+                // Handle duplicate names
+                int counter = 1;
+                while (File.Exists(destinationPath))
+                {
+                    var nameWithoutExt = IOPath.GetFileNameWithoutExtension(fileName);
+                    var extension = IOPath.GetExtension(fileName);
+                    destinationPath = IOPath.Combine(destinationFolder, $"{nameWithoutExt}_{counter}{extension}");
+                    counter++;
+                }
+
+                // Move the file
+                File.Move(screenshotPath, destinationPath);
+
+                var folderName = IOPath.GetFileName(destinationFolder);
+                ShowToast($"✅ Screenshot moved to {folderName}");
+
+                System.Diagnostics.Debug.WriteLine($"✅ Screenshot moved: {screenshotPath} → {destinationPath}");
+            }
+            catch (Exception ex)
+            {
+                ShowToast($"❌ Failed to move: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Move error: {ex.Message}");
+            }
+        }
+
+
 
         private async Task SaveScreenshot(string sourcePath, string destinationFolder)
         {

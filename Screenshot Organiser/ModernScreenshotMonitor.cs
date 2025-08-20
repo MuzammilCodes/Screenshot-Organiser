@@ -58,14 +58,8 @@ public class ModernScreenshotMonitor : IDisposable
             var context = Platform.CurrentActivity ?? Android.App.Application.Context;
             var intent = new Android.Content.Intent(context, typeof(OverlayService));
 
-            if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.O)
-            {
-                context.StartForegroundService(intent);
-            }
-            else
-            {
-                context.StartService(intent);
-            }
+            // Don't use StartForegroundService - just use regular StartService
+            context.StartService(intent);
         }
         catch (Exception ex)
         {
