@@ -85,7 +85,8 @@ namespace Screenshot_Organiser.Platforms.Android
                     selectBtn!.Click += async (s, e) =>
                     {
                         HideDialog();
-                        await HandleSelectFolder(screenshotPath);
+                        //await HandleSelectFolder(screenshotPath);
+                        await OpenSystemFilePicker(screenshotPath);
                     };
 
                     cancelBtn!.Click += (s, e) =>
@@ -116,70 +117,13 @@ namespace Screenshot_Organiser.Platforms.Android
             });
         }
 
-        private async Task HandleSelectFolder(string screenshotPath)
-        {
-            try
-            {
-                // Simple folder selection with predefined options
-                var items = new[]
-                {
-            "📁 Browse Folders"
-        };
-
-                var builder = new AlertDialog.Builder(this);
-                builder.SetTitle("Select Folder");
-                builder.SetItems(items, async (sender, args) =>
-                {
-                    switch (args.Which)
-                    {
-                        case 0: // Browse Folders
-                            await OpenSystemFilePicker(screenshotPath);
-                            break;
-                        case 1: // Pictures
-                            await MoveToFolder(screenshotPath, "/storage/emulated/0/Pictures");
-                            break;
-                        case 2: // Downloads
-                            await MoveToFolder(screenshotPath, "/storage/emulated/0/Download");
-                            break;
-                        case 3: // Documents
-                            await MoveToFolder(screenshotPath, "/storage/emulated/0/Documents");
-                            break;
-                        case 4: // Music
-                            await MoveToFolder(screenshotPath, "/storage/emulated/0/Music");
-                            break;
-                        case 5: // Movies
-                            await MoveToFolder(screenshotPath, "/storage/emulated/0/Movies");
-                            break;
-                    }
-                });
-
-                var dialog = builder.Create();
-
-                // Make it overlay
-                if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
-                {
-                    dialog.Window?.SetType(WindowManagerTypes.ApplicationOverlay);
-                }
-
-                dialog.Show();
-            }
-            catch (Exception ex)
-            {
-                ShowToast($"Error: {ex.Message}");
-            }
-        }
-
-
-
         private async Task OpenSystemFilePicker(string screenshotPath)
         {
             try
             {
-                // Store screenshot path
                 var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
                 prefs?.Edit()?.PutString("pending_screenshot", screenshotPath)?.Apply();
 
-                // Start MainActivity to handle folder picker
                 var intent = new Intent(this, typeof(MainActivity));
                 intent.AddFlags(ActivityFlags.NewTask);
                 intent.PutExtra("action", "pick_folder");
