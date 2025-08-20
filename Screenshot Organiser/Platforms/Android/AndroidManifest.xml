@@ -1,0 +1,51 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Permissions for modern Android (API 33+) -->
+  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+  <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
+  <!-- System overlay permissions -->
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <!-- For observing file changes -->
+  <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
+
+  <!-- Query all packages for content observation -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.MAIN" />
+    </intent>
+  </queries>
+
+  <application android:allowBackup="true"
+               android:icon="@mipmap/appicon"
+               android:supportsRtl="true"
+               android:requestLegacyExternalStorage="true">
+
+    <!-- File provider for sharing files -->
+    <provider
+        android:name="androidx.core.content.FileProvider"
+        android:authorities="${applicationId}.fileprovider"
+        android:exported="false"
+        android:grantUriPermissions="true">
+      <meta-data
+          android:name="android.support.FILE_PROVIDER_PATHS"
+          android:resource="@xml/file_paths" />
+    </provider>
+
+    <!-- Overlay Service -->
+    <service android:name="Screenshot_Organiser.Platforms.Android.OverlayService"
+             android:enabled="true"
+             android:exported="false"
+             android:foregroundServiceType="specialUse" />
+
+    <!-- Add this property for special use case -->
+    <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+              android:value="screenshot_monitor" />
+
+  </application>
+</manifest>
