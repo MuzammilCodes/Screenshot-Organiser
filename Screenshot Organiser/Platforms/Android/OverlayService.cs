@@ -175,35 +175,25 @@ namespace Screenshot_Organiser.Platforms.Android
         }
 
 
+
         private async Task OpenSystemFilePicker(string screenshotPath)
         {
             try
             {
-                // Create folder picker intent (not file picker)
-                var intent = new Intent(Intent.ActionOpenDocumentTree);
-                intent.AddFlags(ActivityFlags.NewTask);
-                intent.PutExtra(Intent.ExtraLocalOnly, true);
-
-                // Store screenshot path for later
+                // Store screenshot path
                 var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
                 prefs?.Edit()?.PutString("pending_screenshot", screenshotPath)?.Apply();
 
-                StartActivity(intent);
-                ShowToast("📂 Select a folder, then grant access");
+                // Start MainActivity to handle folder picker
+                var intent = new Intent(this, typeof(MainActivity));
+                intent.AddFlags(ActivityFlags.NewTask);
+                intent.PutExtra("action", "pick_folder");
 
-                // Fallback after 10 seconds if no folder selected
-                await Task.Delay(3000);
-                var pendingScreenshot = prefs?.GetString("pending_screenshot", null);
-                if (!string.IsNullOrEmpty(pendingScreenshot) && File.Exists(pendingScreenshot))
-                {
-                    await MoveToFolder(pendingScreenshot, "/storage/emulated/0/Download");
-                    ShowToast("📥 Timeout - Moved to Downloads folder");
-                    prefs?.Edit()?.Remove("pending_screenshot")?.Apply();
-                }
+                StartActivity(intent);
+                ShowToast("📂 Select folder in the app");
             }
             catch (Exception ex)
             {
-                // Fallback to Downloads folder
                 await MoveToFolder(screenshotPath, "/storage/emulated/0/Download");
                 ShowToast("📥 Moved to Downloads folder");
             }
