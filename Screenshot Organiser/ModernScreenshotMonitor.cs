@@ -16,7 +16,7 @@ public class ModernScreenshotMonitor : IDisposable
 {
     private System.Timers.Timer? _timer;
     private DateTime _lastCheckTime;
-    private readonly List<string> _processedFiles = new();
+    private readonly HashSet<string> _processedFiles = new();
 
     public event EventHandler<ScreenshotEventArgs>? ScreenshotDetected;
     public bool IsMonitoring => _timer?.Enabled ?? false;
@@ -85,7 +85,7 @@ public class ModernScreenshotMonitor : IDisposable
     {
         try
         {
-            var screenshots = GetRecentScreenshots();
+            HashSet<string> screenshots = GetRecentScreenshots();
 
             foreach (var screenshot in screenshots)
             {
@@ -93,9 +93,8 @@ public class ModernScreenshotMonitor : IDisposable
                 {
                     _processedFiles.Add(screenshot);
 
-                    // Show overlay instead of raising event
+                    // Show overlay and raise event
                     ShowScreenshotOverlay(screenshot);
-
                     ScreenshotDetected?.Invoke(this, new ScreenshotEventArgs
                     {
                         FilePath = screenshot,
@@ -125,9 +124,9 @@ public class ModernScreenshotMonitor : IDisposable
         }
     }
 
-    private List<string> GetRecentScreenshots()
+    private HashSet<string> GetRecentScreenshots()
     {
-        var screenshots = new List<string>();
+        var screenshots = new HashSet<string>();
 
         try
         {
@@ -178,7 +177,10 @@ public class ModernScreenshotMonitor : IDisposable
             System.Diagnostics.Debug.WriteLine($"Error querying MediaStore: {ex.Message}");
 
             // Fallback: Check screenshot directory directly
-            screenshots.AddRange(GetScreenshotsFromDirectory());
+            //foreach (var screenshot in GetScreenshotsFromDirectory())
+            //{
+            //    screenshots.Add(screenshot);
+            //}
         }
 
         return screenshots;
