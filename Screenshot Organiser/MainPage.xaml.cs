@@ -15,7 +15,6 @@ public partial class MainPage : ContentPage
     {
         InitializeComponent();
         _monitor = new ModernScreenshotMonitor();
-        _monitor.ScreenshotDetected += OnScreenshotDetected;
         CheckPermissions();
     }
 
@@ -152,14 +151,7 @@ public partial class MainPage : ContentPage
         }
     }
 
-    private void OnScreenshotDetected(object sender, ScreenshotEventArgs e)
-    {
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            _screenshotCount++;
-            CountLabel.Text = $"Screenshots processed: {_screenshotCount}";
-        });
-    }
+
 
     protected override void OnAppearing()
     {
