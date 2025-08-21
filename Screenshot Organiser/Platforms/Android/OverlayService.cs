@@ -92,7 +92,6 @@ namespace Screenshot_Organiser.Platforms.Android
                         Gravity = GravityFlags.Center
                     };
 
-
                     _windowManager.AddView(_overlayView, layoutParams);
                 }
                 catch (Exception ex)
@@ -106,12 +105,20 @@ namespace Screenshot_Organiser.Platforms.Android
         {
             try
             {
+                // Store the screenshot path in shared preferences
                 var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
-                prefs?.Edit()?.PutString("pending_screenshot", screenshotPath)?.Apply();
+                var editor = prefs?.Edit();
+                editor?.PutString("pending_screenshot", screenshotPath);
+                editor?.Apply();
 
+                // Add a small delay to ensure overlay is hidden
+                await Task.Delay(300);
+
+                // Create intent with unique timestamp to prevent Android from reusing cached intents
                 var intent = new Intent(this, typeof(MainActivity));
-                intent.AddFlags(ActivityFlags.NewTask);
+                intent.AddFlags(ActivityFlags.NewTask | ActivityFlags.ClearTop);
                 intent.PutExtra("action", "pick_folder");
+                intent.PutExtra("timestamp", DateTimeOffset.Now.ToUnixTimeMilliseconds());
 
                 StartActivity(intent);
             }
@@ -191,9 +198,9 @@ namespace Screenshot_Organiser.Platforms.Android
                 {
                     _windowManager.RemoveView(_overlayView);
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    // View might not be attached
+                    System.Diagnostics.Debug.WriteLine($"Error hiding overlay: {ex.Message}");
                 }
                 _overlayView = null;
             }

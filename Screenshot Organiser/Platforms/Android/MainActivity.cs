@@ -14,13 +14,54 @@ namespace Screenshot_Organiser
         private const int FOLDER_PICKER_REQUEST = 1001;
         private const int DEFAULT_FOLDER_PICKER_REQUEST = 1002;
         private bool _isSettingDefaultFolder = false;
+        private bool _isWaitingForFolderPicker = false;
+        private string _pendingScreenshotPath = null;
 
         protected override void OnCreate(Bundle? savedInstanceState)
         {
             base.OnCreate(savedInstanceState);
 
+            // Reset state
+            _isWaitingForFolderPicker = false;
+            _pendingScreenshotPath = null;
+
             // Check if default screenshot folder is set
             CheckDefaultScreenshotFolder();
+
+            // Process any pending folder picker request
+            ProcessFolderPickerRequest();
+        }
+
+        protected override void OnNewIntent(Intent intent)
+        {
+            base.OnNewIntent(intent);
+            Intent = intent; // Update the current intent
+
+            // Process the new intent
+            ProcessFolderPickerRequest();
+        }
+
+        private void ProcessFolderPickerRequest()
+        {
+            var action = Intent?.GetStringExtra("action");
+
+            if (action == "pick_folder" && !_isWaitingForFolderPicker)
+            {
+                // Get pending screenshot
+                var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
+                _pendingScreenshotPath = prefs?.GetString("pending_screenshot", null);
+
+                if (!string.IsNullOrEmpty(_pendingScreenshotPath) && File.Exists(_pendingScreenshotPath))
+                {
+                    _isWaitingForFolderPicker = true;
+                    StartFolderPicker();
+                }
+                else
+                {
+                    Toast.MakeText(this, "Screenshot no longer exists", ToastLength.Short)?.Show();
+                    FinishAffinity();
+                }
+            }
         }
 
         private void CheckDefaultScreenshotFolder()
@@ -58,8 +99,30 @@ namespace Screenshot_Organiser
 
         private void StartDefaultFolderPicker()
         {
-            var intent = new Intent(Intent.ActionOpenDocumentTree);
-            StartActivityForResult(intent, DEFAULT_FOLDER_PICKER_REQUEST);
+            try
+            {
+                var intent = new Intent(Intent.ActionOpenDocumentTree);
+                StartActivityForResult(intent, DEFAULT_FOLDER_PICKER_REQUEST);
+            }
+            catch (Exception ex)
+            {
+                Toast.MakeText(this, "Unable to open folder picker", ToastLength.Long)?.Show();
+            }
+        }
+
+        private void StartFolderPicker()
+        {
+            try
+            {
+                var intent = new Intent(Intent.ActionOpenDocumentTree);
+                StartActivityForResult(intent, FOLDER_PICKER_REQUEST);
+            }
+            catch (Exception ex)
+            {
+                Toast.MakeText(this, "Unable to open folder picker", ToastLength.Long)?.Show();
+                _isWaitingForFolderPicker = false;
+                FinishAffinity();
+            }
         }
 
         private void SetDefaultScreenshotFolder(string folderPath)
@@ -71,17 +134,45 @@ namespace Screenshot_Organiser
                 ToastLength.Long)?.Show();
         }
 
-        protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)
+        protected override void OnActivityResult(int requestCode, Result resultCode, Intent data)
         {
             base.OnActivityResult(requestCode, resultCode, data);
 
-            if (requestCode == DEFAULT_FOLDER_PICKER_REQUEST && resultCode == Result.Ok && data?.Data != null)
+
+            try
             {
-                HandleDefaultFolderSelection(data.Data);
+                if (requestCode == DEFAULT_FOLDER_PICKER_REQUEST)
+                {
+                    if (resultCode == Result.Ok && data?.Data != null)
+                    {
+                        HandleDefaultFolderSelection(data.Data);
+                    }
+                    else
+                    {
+                        _isSettingDefaultFolder = false;
+                    }
+                }
+                else if (requestCode == FOLDER_PICKER_REQUEST)
+                {
+                    _isWaitingForFolderPicker = false;
+
+                    if (resultCode == Result.Ok && data?.Data != null)
+                    {
+                        HandleFolderSelection(data.Data);
+                    }
+                    else
+                    {
+                        Toast.MakeText(this, "Folder selection cancelled", ToastLength.Short)?.Show();
+                        ClearPendingScreenshot();
+                        FinishAffinity();
+                    }
+                }
             }
-            else if (requestCode == FOLDER_PICKER_REQUEST && resultCode == Result.Ok && data?.Data != null)
+            catch (Exception ex)
             {
-                HandleFolderSelection(data.Data);
+                _isWaitingForFolderPicker = false;
+                _isSettingDefaultFolder = false;
+                FinishAffinity();
             }
         }
 
@@ -107,19 +198,36 @@ namespace Screenshot_Organiser
         {
             try
             {
-                // Get pending screenshot
-                var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
-                var screenshotPath = prefs?.GetString("pending_screenshot", null);
-                if (string.IsNullOrEmpty(screenshotPath) || !File.Exists(screenshotPath))
+
+                if (string.IsNullOrEmpty(_pendingScreenshotPath) || !File.Exists(_pendingScreenshotPath))
                 {
+                    Toast.MakeText(this, "Screenshot no longer exists", ToastLength.Short)?.Show();
+                    ClearPendingScreenshot();
+                    FinishAffinity();
                     return;
                 }
 
                 // Move screenshot to selected folder
-                await MoveScreenshotToSelectedFolder(screenshotPath, folderUri);
+                await MoveScreenshotToSelectedFolder(_pendingScreenshotPath, folderUri);
 
                 // Clear pending screenshot
+                ClearPendingScreenshot();
+            }
+            catch (Exception ex)
+            {
+                Toast.MakeText(this, $"Error: {ex.Message}", ToastLength.Long)?.Show();
+                ClearPendingScreenshot();
+                FinishAffinity();
+            }
+        }
+
+        private void ClearPendingScreenshot()
+        {
+            try
+            {
+                var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
                 prefs?.Edit()?.Remove("pending_screenshot")?.Apply();
+                _pendingScreenshotPath = null;
             }
             catch (Exception ex)
             {
@@ -134,11 +242,23 @@ namespace Screenshot_Organiser
             {
                 await MoveFileToFolder(screenshotPath, folderPath);
             }
+            else
+            {
+                Toast.MakeText(this, "Unable to access selected folder", ToastLength.Long)?.Show();
+            }
         }
 
         private string GetRealPathFromUri(Android.Net.Uri uri)
         {
-            return uri.Path?.Replace("/tree/primary:", "/storage/emulated/0/");
+            try
+            {
+                var path = uri.Path?.Replace("/tree/primary:", "/storage/emulated/0/");
+                return path;
+            }
+            catch (Exception ex)
+            {
+                return null;
+            }
         }
 
         private async Task MoveFileToFolder(string sourcePath, string destinationFolder)
@@ -159,6 +279,9 @@ namespace Screenshot_Organiser
                     counter++;
                 }
 
+                // Mark as moved before moving
+                ModernScreenshotMonitor.MarkFileAsMoved(sourcePath);
+
                 File.Copy(sourcePath, destinationPath, overwrite: true);
                 File.Delete(sourcePath);
 
@@ -169,22 +292,8 @@ namespace Screenshot_Organiser
             catch (Exception ex)
             {
                 Toast.MakeText(this, $"❌ Failed to move: {ex.Message}", ToastLength.Long)?.Show();
+                FinishAffinity();
             }
-        }
-
-        protected override void OnNewIntent(Intent? intent)
-        {
-            base.OnNewIntent(intent);
-            if (intent?.GetStringExtra("action") == "pick_folder")
-            {
-                StartFolderPicker();
-            }
-        }
-
-        private void StartFolderPicker()
-        {
-            var intent = new Intent(Intent.ActionOpenDocumentTree);
-            StartActivityForResult(intent, FOLDER_PICKER_REQUEST);
         }
     }
 }
