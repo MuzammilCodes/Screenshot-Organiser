@@ -198,14 +198,7 @@ public class ModernScreenshotMonitor : IDisposable
 
         try
         {
-            // Primary method: Direct folder monitoring
             screenshots = GetScreenshotsFromSpecificDirectory(_defaultScreenshotFolder);
-
-            // Fallback: MediaStore query filtered by folder
-            if (screenshots.Count == 0)
-            {
-                screenshots = GetRecentScreenshotsFromMediaStore();
-            }
         }
         catch (Exception ex)
         {
@@ -250,66 +243,6 @@ public class ModernScreenshotMonitor : IDisposable
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Error checking directory {folderPath}: {ex.Message}");
-        }
-
-        return screenshots;
-    }
-
-    private HashSet<string> GetRecentScreenshotsFromMediaStore()
-    {
-        var screenshots = new HashSet<string>();
-
-        try
-        {
-            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-            var resolver = context.ContentResolver;
-
-            var uri = MediaStore.Images.Media.ExternalContentUri;
-            var projection = new[]
-            {
-                MediaStore.Images.Media.InterfaceConsts.Data,
-                MediaStore.Images.Media.InterfaceConsts.DateAdded,
-                MediaStore.Images.Media.InterfaceConsts.DisplayName
-            };
-
-            // Filter by default folder and recent date
-            var selection = $"{MediaStore.Images.Media.InterfaceConsts.DateAdded} > ? AND " +
-                          $"{MediaStore.Images.Media.InterfaceConsts.Data} LIKE ?";
-
-            var selectionArgs = new[]
-            {
-                ((DateTimeOffset)_lastCheckTime).ToUnixTimeSeconds().ToString(),
-                $"{_defaultScreenshotFolder}%"
-            };
-
-            var sortOrder = $"{MediaStore.Images.Media.InterfaceConsts.DateAdded} DESC";
-
-            using var cursor = resolver?.Query(uri, projection, selection, selectionArgs, sortOrder);
-
-            if (cursor != null && cursor.MoveToFirst())
-            {
-                var dataIndex = cursor.GetColumnIndex(MediaStore.Images.Media.InterfaceConsts.Data);
-                var nameIndex = cursor.GetColumnIndex(MediaStore.Images.Media.InterfaceConsts.DisplayName);
-
-                do
-                {
-                    var filePath = cursor.GetString(dataIndex);
-                    var fileName = cursor.GetString(nameIndex);
-
-                    if (!string.IsNullOrEmpty(filePath) &&
-                        File.Exists(filePath) &&
-                        filePath.StartsWith(_defaultScreenshotFolder) &&
-                        IsScreenshotFile(filePath, fileName))
-                    {
-                        screenshots.Add(filePath);
-                    }
-
-                } while (cursor.MoveToNext());
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error querying MediaStore: {ex.Message}");
         }
 
         return screenshots;
