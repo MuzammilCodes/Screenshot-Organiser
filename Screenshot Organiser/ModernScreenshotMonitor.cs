@@ -1,8 +1,6 @@
-﻿using Android.Database;
-using Android.Provider;
-using AndroidX.Core.Content;
-using System.Timers;
+﻿using Android.Provider;
 using Screenshot_Organiser.Platforms.Android;
+using System.Timers;
 
 namespace Screenshot_Organiser;
 
@@ -17,6 +15,8 @@ public class ModernScreenshotMonitor : IDisposable
     private System.Timers.Timer? _timer;
     private DateTime _lastCheckTime;
     private readonly HashSet<string> _processedFiles = new();
+    private readonly HashSet<string> _movedFiles = new();
+    private string? _defaultScreenshotFolder;
 
     public event EventHandler<ScreenshotEventArgs>? ScreenshotDetected;
     public bool IsMonitoring => _timer?.Enabled ?? false;
@@ -26,15 +26,34 @@ public class ModernScreenshotMonitor : IDisposable
         return Task.Run(() =>
         {
             _lastCheckTime = DateTime.Now;
+            LoadDefaultScreenshotFolder();
 
             // Start the overlay service
             StartOverlayService();
 
-            _timer = new System.Timers.Timer(2000); // Check every 2 seconds
+            _timer = new System.Timers.Timer(3000);
             _timer.Elapsed += CheckForNewScreenshots;
             _timer.AutoReset = true;
             _timer.Start();
         });
+    }
+
+    private void LoadDefaultScreenshotFolder()
+    {
+        try
+        {
+            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+            var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
+            _defaultScreenshotFolder = prefs?.GetString("default_screenshot_folder",
+                "/storage/emulated/0/Pictures/Screenshots");
+
+            System.Diagnostics.Debug.WriteLine($"Monitoring folder: {_defaultScreenshotFolder}");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error loading default folder: {ex.Message}");
+            _defaultScreenshotFolder = "/storage/emulated/0/Pictures/Screenshots";
+        }
     }
 
     public Task StopMonitoring()
@@ -45,6 +64,7 @@ public class ModernScreenshotMonitor : IDisposable
             _timer?.Dispose();
             _timer = null;
             _processedFiles.Clear();
+            _movedFiles.Clear();
 
             // Stop the overlay service
             StopOverlayService();
@@ -57,8 +77,6 @@ public class ModernScreenshotMonitor : IDisposable
         {
             var context = Platform.CurrentActivity ?? Android.App.Application.Context;
             var intent = new Android.Content.Intent(context, typeof(OverlayService));
-
-            // Don't use StartForegroundService - just use regular StartService
             context.StartService(intent);
         }
         catch (Exception ex)
@@ -81,29 +99,75 @@ public class ModernScreenshotMonitor : IDisposable
         }
     }
 
+    // Method to mark a file as moved (call this from OverlayService after moving)
+    public static void MarkFileAsMoved(string filePath)
+    {
+        // Add to a static collection or use shared preferences
+        try
+        {
+            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+            var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
+            var editor = prefs?.Edit();
+            editor?.PutLong($"moved_{filePath.GetHashCode()}", DateTimeOffset.Now.ToUnixTimeMilliseconds());
+            editor?.Apply();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error marking file as moved: {ex.Message}");
+        }
+    }
+
+    private bool IsFileMoved(string filePath)
+    {
+        try
+        {
+            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+            var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
+            var moveTime = prefs?.GetLong($"moved_{filePath.GetHashCode()}", 0) ?? 0;
+
+            if (moveTime > 0)
+            {
+                // If file was marked as moved within last 5 minutes, consider it moved
+                var moveDateTime = DateTimeOffset.FromUnixTimeMilliseconds(moveTime);
+                return DateTime.Now.Subtract(moveDateTime.DateTime).TotalMinutes < 5;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error checking if file is moved: {ex.Message}");
+        }
+        return false;
+    }
+
     private void CheckForNewScreenshots(object? sender, ElapsedEventArgs e)
     {
         try
         {
-            HashSet<string> screenshots = GetRecentScreenshots();
+            // Only monitor the default screenshot folder
+            HashSet<string> screenshots = GetRecentScreenshotsFromDefaultFolder();
+            _lastCheckTime = DateTime.Now;
 
             foreach (var screenshot in screenshots)
             {
-                if (!_processedFiles.Contains(screenshot))
+                if (File.Exists(screenshot))
                 {
-                    _processedFiles.Add(screenshot);
-
-                    // Show overlay and raise event
-                    ShowScreenshotOverlay(screenshot);
-                    ScreenshotDetected?.Invoke(this, new ScreenshotEventArgs
+                    // Skip if already processed or recently moved
+                    if (!_processedFiles.Contains(screenshot) && !IsFileMoved(screenshot))
                     {
-                        FilePath = screenshot,
-                        Timestamp = DateTime.Now
-                    });
+                        _processedFiles.Add(screenshot);
+
+                        System.Diagnostics.Debug.WriteLine($"New screenshot detected: {screenshot}");
+
+                        // Show overlay and raise event
+                        ShowScreenshotOverlay(screenshot);
+                        ScreenshotDetected?.Invoke(this, new ScreenshotEventArgs
+                        {
+                            FilePath = screenshot,
+                            Timestamp = DateTime.Now
+                        });
+                    }
                 }
             }
-
-            _lastCheckTime = DateTime.Now;
         }
         catch (Exception ex)
         {
@@ -115,7 +179,6 @@ public class ModernScreenshotMonitor : IDisposable
     {
         try
         {
-            // Show overlay dialog via the service
             OverlayService.Instance?.ShowScreenshotDialog(screenshotPath);
         }
         catch (Exception ex)
@@ -124,7 +187,75 @@ public class ModernScreenshotMonitor : IDisposable
         }
     }
 
-    private HashSet<string> GetRecentScreenshots()
+    private HashSet<string> GetRecentScreenshotsFromDefaultFolder()
+    {
+        var screenshots = new HashSet<string>();
+
+        if (string.IsNullOrEmpty(_defaultScreenshotFolder))
+        {
+            return screenshots;
+        }
+
+        try
+        {
+            // Primary method: Direct folder monitoring
+            screenshots = GetScreenshotsFromSpecificDirectory(_defaultScreenshotFolder);
+
+            // Fallback: MediaStore query filtered by folder
+            if (screenshots.Count == 0)
+            {
+                screenshots = GetRecentScreenshotsFromMediaStore();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error getting screenshots from default folder: {ex.Message}");
+        }
+
+        return screenshots;
+    }
+
+    private HashSet<string> GetScreenshotsFromSpecificDirectory(string folderPath)
+    {
+        var screenshots = new HashSet<string>();
+
+        try
+        {
+            if (!Directory.Exists(folderPath))
+            {
+                System.Diagnostics.Debug.WriteLine($"Screenshot folder doesn't exist: {folderPath}");
+                return screenshots;
+            }
+
+            // Get files modified after last check
+            var recentFiles = Directory.GetFiles(folderPath, "*.png")
+                .Concat(Directory.GetFiles(folderPath, "*.jpg"))
+                .Concat(Directory.GetFiles(folderPath, "*.jpeg"))
+                .Where(f =>
+                {
+                    var createdTime = File.GetCreationTime(f);
+                    var modifiedTime = File.GetLastWriteTime(f);
+                    var latestTime = createdTime > modifiedTime ? createdTime : modifiedTime;
+                    return latestTime > _lastCheckTime;
+                })
+                .Where(f => IsScreenshotFile(f, Path.GetFileName(f)));
+
+            foreach (var file in recentFiles)
+            {
+                screenshots.Add(file);
+            }
+
+            System.Diagnostics.Debug.WriteLine($"Found {screenshots.Count} new screenshots in {folderPath}");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error checking directory {folderPath}: {ex.Message}");
+        }
+
+        return screenshots;
+    }
+
+    private HashSet<string> GetRecentScreenshotsFromMediaStore()
     {
         var screenshots = new HashSet<string>();
 
@@ -133,7 +264,6 @@ public class ModernScreenshotMonitor : IDisposable
             var context = Platform.CurrentActivity ?? Android.App.Application.Context;
             var resolver = context.ContentResolver;
 
-            // Query MediaStore for recent images
             var uri = MediaStore.Images.Media.ExternalContentUri;
             var projection = new[]
             {
@@ -142,12 +272,16 @@ public class ModernScreenshotMonitor : IDisposable
                 MediaStore.Images.Media.InterfaceConsts.DisplayName
             };
 
+            // Filter by default folder and recent date
             var selection = $"{MediaStore.Images.Media.InterfaceConsts.DateAdded} > ? AND " +
-                          $"({MediaStore.Images.Media.InterfaceConsts.Data} LIKE '%/Pictures/Screenshots/%' OR " +
-                          $"{MediaStore.Images.Media.InterfaceConsts.Data} LIKE '%screenshot%' OR " +
-                          $"{MediaStore.Images.Media.InterfaceConsts.DisplayName} LIKE '%screenshot%')";
+                          $"{MediaStore.Images.Media.InterfaceConsts.Data} LIKE ?";
 
-            var selectionArgs = new[] { ((DateTimeOffset)_lastCheckTime).ToUnixTimeSeconds().ToString() };
+            var selectionArgs = new[]
+            {
+                ((DateTimeOffset)_lastCheckTime).ToUnixTimeSeconds().ToString(),
+                $"{_defaultScreenshotFolder}%"
+            };
+
             var sortOrder = $"{MediaStore.Images.Media.InterfaceConsts.DateAdded} DESC";
 
             using var cursor = resolver?.Query(uri, projection, selection, selectionArgs, sortOrder);
@@ -164,6 +298,7 @@ public class ModernScreenshotMonitor : IDisposable
 
                     if (!string.IsNullOrEmpty(filePath) &&
                         File.Exists(filePath) &&
+                        filePath.StartsWith(_defaultScreenshotFolder) &&
                         IsScreenshotFile(filePath, fileName))
                     {
                         screenshots.Add(filePath);
@@ -175,44 +310,6 @@ public class ModernScreenshotMonitor : IDisposable
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Error querying MediaStore: {ex.Message}");
-
-            // Fallback: Check screenshot directory directly
-            //foreach (var screenshot in GetScreenshotsFromDirectory())
-            //{
-            //    screenshots.Add(screenshot);
-            //}
-        }
-
-        return screenshots;
-    }
-
-    private List<string> GetScreenshotsFromDirectory()
-    {
-        var screenshots = new List<string>();
-
-        try
-        {
-            var screenshotPaths = new[]
-            {
-                "/storage/emulated/0/Pictures/Screenshots",
-                "/storage/emulated/0/DCIM/Screenshots",
-                "/sdcard/Pictures/Screenshots",
-                "/sdcard/DCIM/Screenshots"
-            };
-
-            foreach (var path in screenshotPaths.Where(Directory.Exists))
-            {
-                var files = Directory.GetFiles(path, "*.png")
-                    .Concat(Directory.GetFiles(path, "*.jpg"))
-                    .Where(f => File.GetCreationTime(f) > _lastCheckTime)
-                    .Where(f => IsScreenshotFile(f, Path.GetFileName(f)));
-
-                screenshots.AddRange(files);
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error checking screenshot directories: {ex.Message}");
         }
 
         return screenshots;
@@ -223,9 +320,11 @@ public class ModernScreenshotMonitor : IDisposable
         var name = fileName?.ToLowerInvariant() ?? Path.GetFileName(filePath).ToLowerInvariant();
         var path = filePath.ToLowerInvariant();
 
+        // More specific screenshot detection
         return name.Contains("screenshot") ||
                name.StartsWith("screen_") ||
                name.StartsWith("scrnshot") ||
+               name.Contains("screen-") ||
                path.Contains("/screenshots/") ||
                path.Contains("/screenshot/");
     }

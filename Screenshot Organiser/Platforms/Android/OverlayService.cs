@@ -1,28 +1,14 @@
 ﻿using Android.App;
 using Android.Content;
 using Android.Graphics;
-using AndroidOS = Android.OS;
+using Android.OS;
+using Android.Runtime;
 using Android.Views;
 using Android.Widget;
 using AndroidX.Core.App;
 using AndroidButton = Android.Widget.Button;
 using AndroidView = Android.Views.View;
-using AndroidTextView = Android.Widget.TextView;
-using AndroidLinearLayout = Android.Widget.LinearLayout;
-using AndroidEnvironment = Android.OS.Environment;
 using IOPath = System.IO.Path;
-using Android.Runtime;
-
-
-
-using Android.App;
-using Android.Content;
-using Android.Graphics;
-using Android.OS;
-using Android.Views;
-using Android.Widget;
-using AndroidX.Core.App;
-using Android.Content.PM;
 
 namespace Screenshot_Organiser.Platforms.Android
 {
@@ -43,7 +29,6 @@ namespace Screenshot_Organiser.Platforms.Android
             _windowManager = GetSystemService(WindowService)?.JavaCast<IWindowManager>();
             CreateNotificationChannel();
 
-            // Pre-create notification to ensure it's ready
             try
             {
                 var notification = CreateNotification();
@@ -56,7 +41,6 @@ namespace Screenshot_Organiser.Platforms.Android
 
         public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId)
         {
-            // Don't start as foreground service - run as regular service
             return StartCommandResult.Sticky;
         }
 
@@ -70,13 +54,17 @@ namespace Screenshot_Organiser.Platforms.Android
             {
                 try
                 {
-                    // Remove existing overlay if present
                     HideDialog();
 
-                    // Create overlay layout
                     _overlayView = LayoutInflater.From(this)?.Inflate(Resource.Layout.overlay_screenshot_dialog, null);
-
                     if (_overlayView == null) return;
+
+                    string fileName = IOPath.GetFileName(screenshotPath);
+                    var txtPath = _overlayView.FindViewById<TextView>(Resource.Id.txtScreenshotPath);
+                    if (txtPath != null)
+                    {
+                        txtPath.Text = fileName;
+                    }
 
                     // Setup button click handlers
                     var selectBtn = _overlayView.FindViewById<AndroidButton>(Resource.Id.btnSelect);
@@ -85,14 +73,15 @@ namespace Screenshot_Organiser.Platforms.Android
                     selectBtn!.Click += async (s, e) =>
                     {
                         HideDialog();
-                        //await HandleSelectFolder(screenshotPath);
                         await OpenSystemFilePicker(screenshotPath);
                     };
 
                     cancelBtn!.Click += (s, e) =>
                     {
                         HideDialog();
-                        ShowToast("Screenshot saved in original location");
+                        // Mark the original file as "processed" to avoid re-detection
+                        MarkFileAsProcessed(screenshotPath);
+                        ShowToast("Screenshot kept in original location");
                     };
 
                     // Setup overlay parameters
@@ -141,7 +130,6 @@ namespace Screenshot_Organiser.Platforms.Android
         {
             try
             {
-                // Wait a moment for file to be ready
                 await Task.Delay(500);
 
                 if (!File.Exists(screenshotPath))
@@ -150,7 +138,6 @@ namespace Screenshot_Organiser.Platforms.Android
                     return;
                 }
 
-                // Create destination folder
                 Directory.CreateDirectory(destinationFolder);
 
                 var fileName = IOPath.GetFileName(screenshotPath);
@@ -166,10 +153,12 @@ namespace Screenshot_Organiser.Platforms.Android
                     counter++;
                 }
 
+                // IMPORTANT: Mark the original file as moved BEFORE moving it
+                ModernScreenshotMonitor.MarkFileAsMoved(screenshotPath);
+
                 // Move the file
                 File.Copy(screenshotPath, destinationPath, overwrite: true);
                 File.Delete(screenshotPath);
-
 
                 var folderName = IOPath.GetFileName(destinationFolder);
                 ShowToast($"✅ Screenshot moved to {folderName}");
@@ -180,6 +169,21 @@ namespace Screenshot_Organiser.Platforms.Android
             {
                 ShowToast($"❌ Failed to move: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"❌ Move error: {ex.Message}");
+            }
+        }
+
+        private void MarkFileAsProcessed(string filePath)
+        {
+            try
+            {
+                var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
+                var editor = prefs?.Edit();
+                editor?.PutLong($"processed_{filePath.GetHashCode()}", DateTimeOffset.Now.ToUnixTimeMilliseconds());
+                editor?.Apply();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error marking file as processed: {ex.Message}");
             }
         }
 
