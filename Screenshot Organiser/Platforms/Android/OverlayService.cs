@@ -59,13 +59,6 @@ namespace Screenshot_Organiser.Platforms.Android
                     _overlayView = LayoutInflater.From(this)?.Inflate(Resource.Layout.overlay_screenshot_dialog, null);
                     if (_overlayView == null) return;
 
-                    string fileName = IOPath.GetFileName(screenshotPath);
-                    var txtPath = _overlayView.FindViewById<TextView>(Resource.Id.txtScreenshotPath);
-                    if (txtPath != null)
-                    {
-                        txtPath.Text = fileName;
-                    }
-
                     // Setup button click handlers
                     var selectBtn = _overlayView.FindViewById<AndroidButton>(Resource.Id.btnSelect);
                     var cancelBtn = _overlayView.FindViewById<AndroidButton>(Resource.Id.btnCancel);
@@ -84,9 +77,11 @@ namespace Screenshot_Organiser.Platforms.Android
                         ShowToast("Screenshot kept in original location");
                     };
 
-                    // Setup overlay parameters
+                    int screenWidth = Resources.DisplayMetrics.WidthPixels;
+                    int targetWidth = (int)(screenWidth * 0.9);
+
                     var layoutParams = new WindowManagerLayoutParams(
-                        WindowManagerLayoutParams.MatchParent,
+                        targetWidth,
                         WindowManagerLayoutParams.WrapContent,
                         Build.VERSION.SdkInt >= BuildVersionCodes.O
                             ? WindowManagerTypes.ApplicationOverlay
@@ -96,6 +91,7 @@ namespace Screenshot_Organiser.Platforms.Android
                     {
                         Gravity = GravityFlags.Center
                     };
+
 
                     _windowManager.AddView(_overlayView, layoutParams);
                 }

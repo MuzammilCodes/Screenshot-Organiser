@@ -28,19 +28,6 @@
       android:layout_marginBottom="24dp"
       android:gravity="center" />
 
-  <TextView
-    android:id="@+id/txtScreenshotPath"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:text="Screenshot Path"
-    android:textColor="@android:color/black"
-    android:textSize="14sp"
-    android:scrollHorizontally="false"
-    android:ellipsize="none"
-    android:singleLine="false"
-    android:lineSpacingExtra="2dp"
-    android:layout_marginBottom="8dp"/>
-
   <LinearLayout
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
