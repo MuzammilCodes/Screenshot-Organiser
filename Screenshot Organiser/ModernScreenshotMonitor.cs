@@ -28,7 +28,7 @@ public class ModernScreenshotMonitor : IDisposable
             _lastCheckTime = DateTime.Now;
             LoadDefaultScreenshotFolder();
 
-            // Start the overlay service
+            // Start the overlay service as a foreground service
             StartOverlayService();
 
             _timer = new System.Timers.Timer(3000);
@@ -77,7 +77,16 @@ public class ModernScreenshotMonitor : IDisposable
         {
             var context = Platform.CurrentActivity ?? Android.App.Application.Context;
             var intent = new Android.Content.Intent(context, typeof(OverlayService));
-            context.StartService(intent);
+
+            // Start as foreground service for persistence
+            if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.O)
+            {
+                context.StartForegroundService(intent);
+            }
+            else
+            {
+                context.StartService(intent);
+            }
         }
         catch (Exception ex)
         {
@@ -96,6 +105,40 @@ public class ModernScreenshotMonitor : IDisposable
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Error stopping overlay service: {ex.Message}");
+        }
+    }
+
+    // Method to restart monitoring if service was killed
+    public static void RestartMonitoringIfNeeded()
+    {
+        try
+        {
+            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+
+            // Check if service is already running
+            var activityManager = context.GetSystemService(Android.Content.Context.ActivityService) as Android.App.ActivityManager;
+            var runningServices = activityManager?.GetRunningServices(int.MaxValue);
+
+            bool serviceRunning = runningServices?.Any(service =>
+                service.Service.ClassName.Contains("OverlayService")) ?? false;
+
+            if (!serviceRunning)
+            {
+                var intent = new Android.Content.Intent(context, typeof(OverlayService));
+
+                if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.O)
+                {
+                    context.StartForegroundService(intent);
+                }
+                else
+                {
+                    context.StartService(intent);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error checking/restarting service: {ex.Message}");
         }
     }
 
@@ -143,6 +186,9 @@ public class ModernScreenshotMonitor : IDisposable
     {
         try
         {
+            // Ensure service is still running (restart if needed)
+            RestartMonitoringIfNeeded();
+
             // Only monitor the default screenshot folder
             HashSet<string> screenshots = GetRecentScreenshotsFromDefaultFolder();
             _lastCheckTime = DateTime.Now;
