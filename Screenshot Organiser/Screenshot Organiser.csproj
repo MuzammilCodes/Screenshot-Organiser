@@ -1,5 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Always applies -->
   <PropertyGroup>
     <TargetFrameworks>net8.0-android</TargetFrameworks>
     <OutputType>Exe</OutputType>
@@ -9,19 +10,29 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
-    <!-- Display Version -->
+    <!-- App Versioning -->
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
-
-    <!-- Application Version -->
     <ApplicationVersion>1</ApplicationVersion>
 
-    <!-- Target Android API 34 (Android 14) -->
-    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">26.0</SupportedOSPlatformVersion>
-    <TargetPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">34</TargetPlatformVersion>
+    <!-- Android API Levels -->
+    <SupportedOSPlatformVersion>26.0</SupportedOSPlatformVersion>
+    <!-- Min SDK 26 -->
+    <TargetPlatformVersion>34</TargetPlatformVersion>
+    <!-- Target Android 14 -->
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net8.0-android|AnyCPU'">
-    <EmbedAssembliesIntoApk>True</EmbedAssembliesIntoApk>
+  <!-- Release-only settings -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <AndroidSupportedAbis>arm64-v8a</AndroidSupportedAbis>
+    <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <!-- Debug-only settings -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
   </PropertyGroup>
 
   <ItemGroup>
@@ -53,14 +64,14 @@
   <ItemGroup>
     <!-- Core MAUI packages -->
     <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.91" />
-    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="8.0.91" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
 
     <!-- Community Toolkit -->
     <PackageReference Include="CommunityToolkit.Maui" Version="7.0.1" />
 
-    <!-- File System Watcher alternative for Android -->
-    <PackageReference Include="Microsoft.Toolkit.Win32.UI.Controls" Version="6.1.3" Condition="'$(TargetFramework)' == 'net8.0-windows10.0.19041.0'" />
+    <!-- Windows-specific -->
+    <PackageReference Include="Microsoft.Toolkit.Win32.UI.Controls" Version="6.1.3"
+                      Condition="'$(TargetFramework)' == 'net8.0-windows10.0.19041.0'" />
   </ItemGroup>
 
   <ItemGroup>

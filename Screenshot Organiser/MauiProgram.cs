@@ -1,6 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
-using CommunityToolkit.Maui;
-using Screenshot_Organiser;
+﻿using CommunityToolkit.Maui;
 
 namespace Screenshot_Organiser;
 

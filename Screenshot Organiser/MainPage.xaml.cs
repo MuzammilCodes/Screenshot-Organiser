@@ -1,15 +1,10 @@
-﻿using CommunityToolkit.Maui.Storage;
-using Microsoft.Maui.Storage;
-using Screenshot_Organiser;
-
-namespace Screenshot_Organiser;
+﻿namespace Screenshot_Organiser;
 
 public partial class MainPage : ContentPage
 {
     private readonly ModernScreenshotMonitor _monitor;
     private bool _hasPermissions = false;
     private bool _hasOverlayPermission = false;
-    private int _screenshotCount = 0;
 
     public MainPage()
     {
