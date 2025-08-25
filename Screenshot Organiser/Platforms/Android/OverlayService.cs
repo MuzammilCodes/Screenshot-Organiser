@@ -11,9 +11,10 @@ using AndroidButton = Android.Widget.Button;
 using AndroidView = Android.Views.View;
 using IOPath = System.IO.Path;
 
+
 namespace Screenshot_Organiser.Platforms.Android
 {
-    [Service(Exported = false, ForegroundServiceType = ForegroundService.TypeDataSync)]  // Fixed reference
+    [Service(Exported = false, ForegroundServiceType = ForegroundService.TypeDataSync)]
     public class OverlayService : Service
     {
         private IWindowManager? _windowManager;
@@ -45,7 +46,6 @@ namespace Screenshot_Organiser.Platforms.Android
 
                 var notification = CreateNotification();
                 StartForeground(NOTIFICATION_ID, notification);
-
             }
             catch (Exception ex)
             {
@@ -57,7 +57,6 @@ namespace Screenshot_Organiser.Platforms.Android
         {
             try
             {
-
                 // Handle stop service action
                 if (intent?.Action == "STOP_SERVICE")
                 {
@@ -76,6 +75,7 @@ namespace Screenshot_Organiser.Platforms.Android
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Error in OnStartCommand: {ex.Message}");
                 return StartCommandResult.Sticky;
             }
         }
@@ -99,7 +99,7 @@ namespace Screenshot_Organiser.Platforms.Android
                         _overlayView = LayoutInflater.From(this)?.Inflate(Screenshot_Organiser.Resource.Layout.overlay_screenshot_dialog, null);
                         if (_overlayView == null) return;
 
-                        // Setup button click handlers - Fixed Resource references
+                        // Setup button click handlers
                         var selectBtn = _overlayView.FindViewById<AndroidButton>(Screenshot_Organiser.Resource.Id.btnSelect);
                         var cancelBtn = _overlayView.FindViewById<AndroidButton>(Screenshot_Organiser.Resource.Id.btnCancel);
 
@@ -151,6 +151,7 @@ namespace Screenshot_Organiser.Platforms.Android
                     }
                     catch (Exception ex)
                     {
+                        System.Diagnostics.Debug.WriteLine($"Error creating overlay view: {ex.Message}");
                     }
                 });
             }
@@ -164,7 +165,6 @@ namespace Screenshot_Organiser.Platforms.Android
         {
             try
             {
-
                 var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
                 var editor = prefs?.Edit();
                 editor?.PutString("pending_screenshot", screenshotPath);
@@ -173,15 +173,16 @@ namespace Screenshot_Organiser.Platforms.Android
                 await Task.Delay(300);
 
                 var intent = new Intent(this, typeof(MainActivity));
+                // Changed: Remove ExcludeFromRecents flag to allow proper app flow
                 intent.AddFlags(ActivityFlags.NewTask | ActivityFlags.ClearTop);
                 intent.PutExtra("action", "pick_folder");
                 intent.PutExtra("timestamp", DateTimeOffset.Now.ToUnixTimeMilliseconds());
 
                 StartActivity(intent);
-
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Error opening file picker: {ex.Message}");
                 try
                 {
                     await MoveToFolder(screenshotPath, "/storage/emulated/0/Download");
@@ -190,6 +191,7 @@ namespace Screenshot_Organiser.Platforms.Android
                 catch (Exception fallbackEx)
                 {
                     System.Diagnostics.Debug.WriteLine($"Fallback move also failed: {fallbackEx.Message}");
+                    ShowToast("❌ Failed to move screenshot");
                 }
             }
         }
@@ -328,6 +330,7 @@ namespace Screenshot_Organiser.Platforms.Android
             try
             {
                 var intent = new Intent(this, typeof(MainActivity));
+                intent.AddFlags(ActivityFlags.SingleTop | ActivityFlags.ClearTop);
                 var pendingIntent = PendingIntent.GetActivity(this, 0, intent,
                     Build.VERSION.SdkInt >= BuildVersionCodes.M ? PendingIntentFlags.Immutable : PendingIntentFlags.UpdateCurrent);
 
@@ -344,8 +347,8 @@ namespace Screenshot_Organiser.Platforms.Android
                     .SetPriority(NotificationCompat.PriorityLow)
                     .SetAutoCancel(false)
                     .SetCategory(NotificationCompat.CategoryService)
-                    .AddAction(global::Android.Resource.Drawable.IcMenuCloseClearCancel, "Stop", stopPendingIntent)  // Fixed reference
-                    .SetSmallIcon(global::Android.Resource.Drawable.IcMenuCamera)  // Added small icon
+                    .AddAction(global::Android.Resource.Drawable.IcMenuCloseClearCancel, "Stop", stopPendingIntent)
+                    .SetSmallIcon(global::Android.Resource.Drawable.IcMenuCamera)
                     .Build();
             }
             catch (Exception ex)
@@ -389,10 +392,6 @@ namespace Screenshot_Organiser.Platforms.Android
             try
             {
                 System.Diagnostics.Debug.WriteLine("OverlayService OnTaskRemoved - App removed from recent apps");
-
-                // Don't restart automatically on Xiaomi devices as it often causes issues
-                // Instead, rely on the user keeping the app in autostart list
-
                 base.OnTaskRemoved(rootIntent);
             }
             catch (Exception ex)

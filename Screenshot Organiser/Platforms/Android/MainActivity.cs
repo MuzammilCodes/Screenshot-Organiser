@@ -61,7 +61,8 @@ namespace Screenshot_Organiser
                 else
                 {
                     Toast.MakeText(this, "Screenshot no longer exists", ToastLength.Short)?.Show();
-                    FinishAffinity();
+                    // Changed: Use Finish() instead of FinishAffinity() to only close this activity
+                    Finish();
                 }
             }
         }
@@ -71,6 +72,7 @@ namespace Screenshot_Organiser
             try
             {
                 var intent = new Intent(Intent.ActionOpenDocumentTree);
+                // Remove ExcludeFromRecents - let the folder picker appear normally
                 StartActivityForResult(intent, DEFAULT_FOLDER_PICKER_REQUEST);
             }
             catch (Exception ex)
@@ -78,6 +80,7 @@ namespace Screenshot_Organiser
                 Toast.MakeText(this, "Unable to open folder picker", ToastLength.Long)?.Show();
                 SetDefaultFallbackFolder();
                 _isSettingDefaultFolder = false;
+                NotifyMainPageFolderSet();
             }
         }
 
@@ -86,13 +89,15 @@ namespace Screenshot_Organiser
             try
             {
                 var intent = new Intent(Intent.ActionOpenDocumentTree);
+                // Remove ExcludeFromRecents - let the folder picker appear normally
                 StartActivityForResult(intent, FOLDER_PICKER_REQUEST);
             }
             catch (Exception ex)
             {
                 Toast.MakeText(this, "Unable to open folder picker", ToastLength.Long)?.Show();
                 _isWaitingForFolderPicker = false;
-                FinishAffinity();
+                // Changed: Use Finish() instead of FinishAffinity()
+                Finish();
             }
         }
 
@@ -119,6 +124,27 @@ namespace Screenshot_Organiser
                 ToastLength.Long)?.Show();
         }
 
+        private void NotifyMainPageFolderSet()
+        {
+            try
+            {
+                // Notify MainPage that folder setup is complete
+                if (Microsoft.Maui.Controls.Application.Current?.MainPage is AppShell shell &&
+                    shell.CurrentPage is MainPage mainPage)
+                {
+                    mainPage.OnDefaultFolderSet();
+                }
+                else if (Microsoft.Maui.Controls.Application.Current?.MainPage is MainPage directMainPage)
+                {
+                    directMainPage.OnDefaultFolderSet();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error notifying MainPage: {ex.Message}");
+            }
+        }
+
         protected override void OnActivityResult(int requestCode, Result resultCode, Intent data)
         {
             base.OnActivityResult(requestCode, resultCode, data);
@@ -138,6 +164,19 @@ namespace Screenshot_Organiser
                         // User cancelled, set default fallback
                         SetDefaultFallbackFolder();
                     }
+
+                    // Always notify MainPage that folder setup is complete
+                    NotifyMainPageFolderSet();
+
+                    // Close this activity since we're done - but don't use FinishAffinity
+                    Finish();
+
+                    // Clear recent apps stack of system activities after a delay
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(1000);
+                        MinimizeSystemActivitiesInRecents();
+                    });
                 }
                 else if (requestCode == FOLDER_PICKER_REQUEST)
                 {
@@ -151,8 +190,16 @@ namespace Screenshot_Organiser
                     {
                         Toast.MakeText(this, "Folder selection cancelled", ToastLength.Short)?.Show();
                         ClearPendingScreenshot();
-                        FinishAffinity();
+                        // Changed: Use Finish() instead of FinishAffinity()
+                        Finish();
                     }
+
+                    // Clear system activities from recents after a delay
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(1000);
+                        MinimizeSystemActivitiesInRecents();
+                    });
                 }
             }
             catch (Exception ex)
@@ -160,7 +207,17 @@ namespace Screenshot_Organiser
                 _isWaitingForFolderPicker = false;
                 _isSettingDefaultFolder = false;
                 Toast.MakeText(this, $"Error: {ex.Message}", ToastLength.Long)?.Show();
-                FinishAffinity();
+
+                if (requestCode == DEFAULT_FOLDER_PICKER_REQUEST)
+                {
+                    NotifyMainPageFolderSet();
+                    Finish();
+                }
+                else
+                {
+                    // Changed: Use Finish() instead of FinishAffinity()
+                    Finish();
+                }
             }
         }
 
@@ -193,7 +250,8 @@ namespace Screenshot_Organiser
                 {
                     Toast.MakeText(this, "Screenshot no longer exists", ToastLength.Short)?.Show();
                     ClearPendingScreenshot();
-                    FinishAffinity();
+                    // Changed: Use Finish() instead of FinishAffinity()
+                    Finish();
                     return;
                 }
 
@@ -207,7 +265,8 @@ namespace Screenshot_Organiser
             {
                 Toast.MakeText(this, $"Error: {ex.Message}", ToastLength.Long)?.Show();
                 ClearPendingScreenshot();
-                FinishAffinity();
+                // Changed: Use Finish() instead of FinishAffinity()
+                Finish();
             }
         }
 
@@ -277,13 +336,55 @@ namespace Screenshot_Organiser
 
                 Toast.MakeText(this, $"✅ Screenshot moved to {Path.GetFileName(destinationFolder)}",
                     ToastLength.Long)?.Show();
-                FinishAffinity();
+                // Changed: Use Finish() instead of FinishAffinity()
+                Finish();
             }
             catch (Exception ex)
             {
-                Toast.MakeText(this, $"❌ Failed to move: {ex.Message}", ToastLength.Long)?.Show();
-                FinishAffinity();
+                ShowToast($"❌ Failed to move: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Move error: {ex.Message}");
+                // Changed: Use Finish() instead of FinishAffinity()
+                Finish();
             }
+        }
+
+        private void ShowToast(string message)
+        {
+            try
+            {
+                Toast.MakeText(this, message, ToastLength.Long)?.Show();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error showing toast: {ex.Message}");
+            }
+        }
+
+        // Alternative approach: Use activity flags to minimize recent apps impact
+        private void MinimizeSystemActivitiesInRecents()
+        {
+            try
+            {
+                // Since Android has restricted access to recent tasks, we'll use a different approach
+                // Focus on making sure our main app stays in recents while system activities don't linger
+
+                // Move this picker activity to background without affecting main app
+                MoveTaskToBack(false); // false = don't move entire task stack, just this activity
+
+                System.Diagnostics.Debug.WriteLine("Moved picker activity to background");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error minimizing system activities: {ex.Message}");
+            }
+        }
+
+        protected override void OnResume()
+        {
+            base.OnResume();
+
+            // Remove the problematic MoveTaskToBack call that was interfering with app flow
+            // The system activities will be cleared by the delayed task instead
         }
     }
 }

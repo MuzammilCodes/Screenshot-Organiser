@@ -1,5 +1,4 @@
-﻿using Android.Provider;
-using Screenshot_Organiser.Platforms.Android;
+﻿using Screenshot_Organiser.Platforms.Android;
 using System.Timers;
 
 namespace Screenshot_Organiser;
@@ -15,7 +14,6 @@ public class ModernScreenshotMonitor : IDisposable
     private System.Timers.Timer? _timer;
     private DateTime _lastCheckTime;
     private readonly HashSet<string> _processedFiles = new();
-    private readonly HashSet<string> _movedFiles = new();
     private string? _defaultScreenshotFolder;
 
     public event EventHandler<ScreenshotEventArgs>? ScreenshotDetected;
@@ -64,7 +62,6 @@ public class ModernScreenshotMonitor : IDisposable
             _timer?.Dispose();
             _timer = null;
             _processedFiles.Clear();
-            _movedFiles.Clear();
 
             // Stop the overlay service
             StopOverlayService();
@@ -145,7 +142,6 @@ public class ModernScreenshotMonitor : IDisposable
     // Method to mark a file as moved (call this from OverlayService after moving)
     public static void MarkFileAsMoved(string filePath)
     {
-        // Add to a static collection or use shared preferences
         try
         {
             var context = Platform.CurrentActivity ?? Android.App.Application.Context;
