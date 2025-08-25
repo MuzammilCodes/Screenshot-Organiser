@@ -1,24 +1,25 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <!-- Permissions for modern Android (API 33+) -->
-  <!-- Essential permissions -->
-  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-  <!-- Optional but recommended -->
-  <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
-  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-  <uses-permission android:name="android.permission.WAKE_LOCK" />
-
+  <!-- File access permissions -->
   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
   <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
   <!-- System overlay permissions -->
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+  <!-- Service permissions -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-  <!-- For observing file changes -->
+
+  <!-- Optional permissions -->
+  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+  <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
   <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
 
   <!-- Query all packages for content observation -->
@@ -30,8 +31,10 @@
 
   <application android:allowBackup="true"
                android:icon="@mipmap/appicon"
-               android:supportsRtl="true"
-               android:requestLegacyExternalStorage="true">
+               android:supportsRtl="true">
+
+    <!-- REMOVED: android:requestLegacyExternalStorage="true" -->
+    <!-- This was causing permission issues on Android 11+ -->
 
     <!-- File provider for sharing files -->
     <provider

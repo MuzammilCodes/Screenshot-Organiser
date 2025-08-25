@@ -25,11 +25,8 @@ namespace Screenshot_Organiser
             _isWaitingForFolderPicker = false;
             _pendingScreenshotPath = null;
 
-            // Check if default screenshot folder is set
-            CheckDefaultScreenshotFolder();
-
-            // Process any pending folder picker request
-            ProcessFolderPickerRequest();
+            // Process any pending requests
+            ProcessIntent();
         }
 
         protected override void OnNewIntent(Intent intent)
@@ -38,14 +35,19 @@ namespace Screenshot_Organiser
             Intent = intent; // Update the current intent
 
             // Process the new intent
-            ProcessFolderPickerRequest();
+            ProcessIntent();
         }
 
-        private void ProcessFolderPickerRequest()
+        private void ProcessIntent()
         {
             var action = Intent?.GetStringExtra("action");
 
-            if (action == "pick_folder" && !_isWaitingForFolderPicker)
+            if (action == "setup_default_folder" && !_isSettingDefaultFolder)
+            {
+                _isSettingDefaultFolder = true;
+                StartDefaultFolderPicker();
+            }
+            else if (action == "pick_folder" && !_isWaitingForFolderPicker)
             {
                 // Get pending screenshot
                 var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
@@ -64,39 +66,6 @@ namespace Screenshot_Organiser
             }
         }
 
-        private void CheckDefaultScreenshotFolder()
-        {
-            var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
-            var defaultFolder = prefs?.GetString("default_screenshot_folder", null);
-
-            if (string.IsNullOrEmpty(defaultFolder))
-            {
-                // Show dialog to set default folder
-                ShowDefaultFolderSetupDialog();
-            }
-        }
-
-        private void ShowDefaultFolderSetupDialog()
-        {
-            var dialog = new AlertDialog.Builder(this)
-                .SetTitle("Setup Default Screenshot Folder")
-                .SetMessage("Please select the folder where your device saves screenshots (usually Pictures/Screenshots)")
-                .SetPositiveButton("Select Folder", (sender, args) =>
-                {
-                    _isSettingDefaultFolder = true;
-                    StartDefaultFolderPicker();
-                })
-                .SetNegativeButton("Use Default", (sender, args) =>
-                {
-                    // Set common default screenshot paths
-                    SetDefaultScreenshotFolder("/storage/emulated/0/Pictures/Screenshots");
-                })
-                .SetCancelable(false)
-                .Create();
-
-            dialog.Show();
-        }
-
         private void StartDefaultFolderPicker()
         {
             try
@@ -107,6 +76,8 @@ namespace Screenshot_Organiser
             catch (Exception ex)
             {
                 Toast.MakeText(this, "Unable to open folder picker", ToastLength.Long)?.Show();
+                SetDefaultFallbackFolder();
+                _isSettingDefaultFolder = false;
             }
         }
 
@@ -125,6 +96,20 @@ namespace Screenshot_Organiser
             }
         }
 
+        private void SetDefaultFallbackFolder()
+        {
+            try
+            {
+                SetDefaultScreenshotFolder("/storage/emulated/0/Pictures/Screenshots");
+                Toast.MakeText(this, "Using default screenshot folder: Pictures/Screenshots",
+                    ToastLength.Long)?.Show();
+            }
+            catch (Exception ex)
+            {
+                Toast.MakeText(this, $"Error setting default folder: {ex.Message}", ToastLength.Long)?.Show();
+            }
+        }
+
         private void SetDefaultScreenshotFolder(string folderPath)
         {
             var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
@@ -138,18 +123,20 @@ namespace Screenshot_Organiser
         {
             base.OnActivityResult(requestCode, resultCode, data);
 
-
             try
             {
                 if (requestCode == DEFAULT_FOLDER_PICKER_REQUEST)
                 {
+                    _isSettingDefaultFolder = false;
+
                     if (resultCode == Result.Ok && data?.Data != null)
                     {
                         HandleDefaultFolderSelection(data.Data);
                     }
                     else
                     {
-                        _isSettingDefaultFolder = false;
+                        // User cancelled, set default fallback
+                        SetDefaultFallbackFolder();
                     }
                 }
                 else if (requestCode == FOLDER_PICKER_REQUEST)
@@ -172,6 +159,7 @@ namespace Screenshot_Organiser
             {
                 _isWaitingForFolderPicker = false;
                 _isSettingDefaultFolder = false;
+                Toast.MakeText(this, $"Error: {ex.Message}", ToastLength.Long)?.Show();
                 FinishAffinity();
             }
         }
@@ -185,12 +173,15 @@ namespace Screenshot_Organiser
                 {
                     SetDefaultScreenshotFolder(folderPath);
                 }
-                _isSettingDefaultFolder = false;
+                else
+                {
+                    SetDefaultFallbackFolder();
+                }
             }
             catch (Exception ex)
             {
                 Toast.MakeText(this, $"Error setting default folder: {ex.Message}", ToastLength.Long)?.Show();
-                _isSettingDefaultFolder = false;
+                SetDefaultFallbackFolder();
             }
         }
 
@@ -198,7 +189,6 @@ namespace Screenshot_Organiser
         {
             try
             {
-
                 if (string.IsNullOrEmpty(_pendingScreenshotPath) || !File.Exists(_pendingScreenshotPath))
                 {
                     Toast.MakeText(this, "Screenshot no longer exists", ToastLength.Short)?.Show();

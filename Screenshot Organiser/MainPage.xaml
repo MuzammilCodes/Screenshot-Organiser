@@ -1,71 +1,62 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
-<ContentPage x:Class="Screenshot_Organiser.MainPage"
-             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Screenshot_Organiser.MainPage"
              Title="Screenshot Organizer">
 
     <ScrollView>
         <VerticalStackLayout Spacing="25" Padding="30,0" VerticalOptions="Center">
 
-            <Label Text="Screenshot Organizer"
-                   FontSize="28"
-                   FontAttributes="Bold"
-                   HorizontalOptions="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+            <Image
+                Source="dotnet_bot.png"
+                HeightRequest="185"
+                Aspect="AspectFit"
+                SemanticProperties.Description="Cute dot net bot waving hi to you!" />
 
-            <Label Text="This app will ask you where to save each screenshot you take."
-                   FontSize="16"
-                   HorizontalOptions="Center"
-                   HorizontalTextAlignment="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
+            <Label 
+                x:Name="StatusLabel"
+                Text="Status: 🔄 Checking permissions..."
+                FontSize="18"
+                HorizontalOptions="Center" />
 
-            <Button x:Name="PermissionsBtn"
-                    Text="🔐 Grant Permissions"
-                    Clicked="OnPermissionsClicked"
-                    BackgroundColor="{StaticResource Primary}"
-                    TextColor="White"
-                    FontSize="16"
-                    Padding="20,12" />
+            <!-- Permissions Button - Hidden by default since permissions are requested automatically -->
+            <Button 
+                x:Name="PermissionsBtn"
+                Text="🔐 Grant Permissions"
+                IsVisible="False"
+                FontSize="16"
+                BackgroundColor="DarkBlue"
+                TextColor="White" />
 
-            <Button x:Name="StartMonitoringBtn"
-                    Text="▶️ Start Monitoring"
-                    Clicked="OnStartMonitoringClicked"
-                    BackgroundColor="{StaticResource Success}"
-                    TextColor="White"
-                    FontSize="16"
-                    Padding="20,12"
-                    IsEnabled="False" />
+            <Button 
+                x:Name="StartMonitoringBtn"
+                Text="▶️ Start Monitoring"
+                Clicked="OnStartMonitoringClicked"
+                FontSize="16"
+                BackgroundColor="Green"
+                TextColor="White"
+                IsEnabled="False" />
 
-            <Button x:Name="StopMonitoringBtn"
-                    Text="⏹️ Stop Monitoring"
-                    Clicked="OnStopMonitoringClicked"
-                    BackgroundColor="{StaticResource Danger}"
-                    TextColor="White"
-                    FontSize="16"
-                    Padding="20,12"
-                    IsEnabled="False" />
+            <Button 
+                x:Name="StopMonitoringBtn"
+                Text="⏹️ Stop Monitoring"
+                Clicked="OnStopMonitoringClicked"
+                FontSize="16"
+                BackgroundColor="Red"
+                TextColor="White"
+                IsEnabled="False" />
 
-            <Frame BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}"
-                   Padding="15"
-                   CornerRadius="10">
-                <VerticalStackLayout>
-                    <Label x:Name="StatusLabel"
-                           Text="Status: Ready"
-                           FontSize="14"
-                           FontAttributes="Bold"
-                           HorizontalOptions="Center"
-                           TextColor="{StaticResource Primary}" />
+            <Label 
+                Text="📱 How it works:"
+                FontSize="16"
+                FontAttributes="Bold"
+                HorizontalOptions="Center" />
 
-                    
-                </VerticalStackLayout>
-            </Frame>
-
-            <Label Text="💡 Tip: Keep the app running in background for continuous monitoring"
-                   FontSize="12"
-                   HorizontalOptions="Center"
-                   HorizontalTextAlignment="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"
-                   Margin="0,10,0,0" />
+            <Label 
+                Text="1. Grant the required permissions when prompted&#x0a;2. Select your default screenshot folder&#x0a;3. Start monitoring&#x0a;4. Take screenshots normally&#x0a;5. A dialog will appear to organize each screenshot"
+                FontSize="14"
+                HorizontalOptions="Center"
+                HorizontalTextAlignment="Center" />
 
         </VerticalStackLayout>
     </ScrollView>
