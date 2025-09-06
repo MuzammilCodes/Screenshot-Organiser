@@ -78,7 +78,6 @@ namespace Screenshot_Organiser
             catch (Exception ex)
             {
                 Toast.MakeText(this, "Unable to open folder picker", ToastLength.Long)?.Show();
-                SetDefaultFallbackFolder();
                 _isSettingDefaultFolder = false;
                 NotifyMainPageFolderSet();
             }
@@ -101,19 +100,7 @@ namespace Screenshot_Organiser
             }
         }
 
-        private void SetDefaultFallbackFolder()
-        {
-            try
-            {
-                SetDefaultScreenshotFolder("/storage/emulated/0/Pictures/Screenshots");
-                Toast.MakeText(this, "Using default screenshot folder: Pictures/Screenshots",
-                    ToastLength.Long)?.Show();
-            }
-            catch (Exception ex)
-            {
-                Toast.MakeText(this, $"Error setting default folder: {ex.Message}", ToastLength.Long)?.Show();
-            }
-        }
+
 
         private void SetDefaultScreenshotFolder(string folderPath)
         {
@@ -159,11 +146,7 @@ namespace Screenshot_Organiser
                     {
                         HandleDefaultFolderSelection(data.Data);
                     }
-                    else
-                    {
-                        // User cancelled, set default fallback
-                        SetDefaultFallbackFolder();
-                    }
+
 
                     // Always notify MainPage that folder setup is complete
                     NotifyMainPageFolderSet();
@@ -171,12 +154,6 @@ namespace Screenshot_Organiser
                     // Close this activity since we're done - but don't use FinishAffinity
                     Finish();
 
-                    // Clear recent apps stack of system activities after a delay
-                    _ = Task.Run(async () =>
-                    {
-                        await Task.Delay(1000);
-                        MinimizeSystemActivitiesInRecents();
-                    });
                 }
                 else if (requestCode == FOLDER_PICKER_REQUEST)
                 {
@@ -194,12 +171,7 @@ namespace Screenshot_Organiser
                         Finish();
                     }
 
-                    // Clear system activities from recents after a delay
-                    _ = Task.Run(async () =>
-                    {
-                        await Task.Delay(1000);
-                        MinimizeSystemActivitiesInRecents();
-                    });
+                    
                 }
             }
             catch (Exception ex)
@@ -230,15 +202,11 @@ namespace Screenshot_Organiser
                 {
                     SetDefaultScreenshotFolder(folderPath);
                 }
-                else
-                {
-                    SetDefaultFallbackFolder();
-                }
+               
             }
             catch (Exception ex)
             {
                 Toast.MakeText(this, $"Error setting default folder: {ex.Message}", ToastLength.Long)?.Show();
-                SetDefaultFallbackFolder();
             }
         }
 
@@ -360,31 +328,11 @@ namespace Screenshot_Organiser
             }
         }
 
-        // Alternative approach: Use activity flags to minimize recent apps impact
-        private void MinimizeSystemActivitiesInRecents()
-        {
-            try
-            {
-                // Since Android has restricted access to recent tasks, we'll use a different approach
-                // Focus on making sure our main app stays in recents while system activities don't linger
-
-                // Move this picker activity to background without affecting main app
-                MoveTaskToBack(false); // false = don't move entire task stack, just this activity
-
-                System.Diagnostics.Debug.WriteLine("Moved picker activity to background");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error minimizing system activities: {ex.Message}");
-            }
-        }
+        
 
         protected override void OnResume()
         {
             base.OnResume();
-
-            // Remove the problematic MoveTaskToBack call that was interfering with app flow
-            // The system activities will be cleared by the delayed task instead
         }
     }
 }
