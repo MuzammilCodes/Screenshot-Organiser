@@ -16,6 +16,7 @@ namespace Screenshot_Organiser
         private bool _isSettingDefaultFolder = false;
         private bool _isWaitingForFolderPicker = false;
         private string _pendingScreenshotPath = null;
+        private bool _wasLaunchedForFolderSelection = false; // Track if launched specifically for folder selection
 
         protected override void OnCreate(Bundle? savedInstanceState)
         {
@@ -24,6 +25,7 @@ namespace Screenshot_Organiser
             // Reset state
             _isWaitingForFolderPicker = false;
             _pendingScreenshotPath = null;
+            _wasLaunchedForFolderSelection = false;
 
             // Process any pending requests
             ProcessIntent();
@@ -45,6 +47,7 @@ namespace Screenshot_Organiser
             if (action == "setup_default_folder" && !_isSettingDefaultFolder)
             {
                 _isSettingDefaultFolder = true;
+                _wasLaunchedForFolderSelection = true; // Mark that this was launched for folder selection
                 StartDefaultFolderPicker();
             }
             else if (action == "pick_folder" && !_isWaitingForFolderPicker)
@@ -56,12 +59,12 @@ namespace Screenshot_Organiser
                 if (!string.IsNullOrEmpty(_pendingScreenshotPath) && File.Exists(_pendingScreenshotPath))
                 {
                     _isWaitingForFolderPicker = true;
+                    _wasLaunchedForFolderSelection = true; // Mark that this was launched for folder selection
                     StartFolderPicker();
                 }
                 else
                 {
                     Toast.MakeText(this, "Screenshot no longer exists", ToastLength.Short)?.Show();
-                    // Changed: Use Finish() instead of FinishAffinity() to only close this activity
                     Finish();
                 }
             }
@@ -72,7 +75,6 @@ namespace Screenshot_Organiser
             try
             {
                 var intent = new Intent(Intent.ActionOpenDocumentTree);
-                // Remove ExcludeFromRecents - let the folder picker appear normally
                 StartActivityForResult(intent, DEFAULT_FOLDER_PICKER_REQUEST);
             }
             catch (Exception ex)
@@ -88,19 +90,15 @@ namespace Screenshot_Organiser
             try
             {
                 var intent = new Intent(Intent.ActionOpenDocumentTree);
-                // Remove ExcludeFromRecents - let the folder picker appear normally
                 StartActivityForResult(intent, FOLDER_PICKER_REQUEST);
             }
             catch (Exception ex)
             {
                 Toast.MakeText(this, "Unable to open folder picker", ToastLength.Long)?.Show();
                 _isWaitingForFolderPicker = false;
-                // Changed: Use Finish() instead of FinishAffinity()
                 Finish();
             }
         }
-
-
 
         private void SetDefaultScreenshotFolder(string folderPath)
         {
@@ -147,13 +145,12 @@ namespace Screenshot_Organiser
                         HandleDefaultFolderSelection(data.Data);
                     }
 
-
                     // Always notify MainPage that folder setup is complete
                     NotifyMainPageFolderSet();
 
-                    // Close this activity since we're done - but don't use FinishAffinity
-                    Finish();
-
+                    // For default folder setup during initial app setup, NEVER close the activity
+                    // Only close if this is a standalone folder picker launched from overlay
+                    System.Diagnostics.Debug.WriteLine("Default folder setup completed, staying in app");
                 }
                 else if (requestCode == FOLDER_PICKER_REQUEST)
                 {
@@ -167,11 +164,13 @@ namespace Screenshot_Organiser
                     {
                         Toast.MakeText(this, "Folder selection cancelled", ToastLength.Short)?.Show();
                         ClearPendingScreenshot();
-                        // Changed: Use Finish() instead of FinishAffinity()
-                        Finish();
-                    }
 
-                    
+                        // Only finish for screenshot folder selection (not default folder setup)
+                        if (_wasLaunchedForFolderSelection)
+                        {
+                            Finish();
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -183,12 +182,15 @@ namespace Screenshot_Organiser
                 if (requestCode == DEFAULT_FOLDER_PICKER_REQUEST)
                 {
                     NotifyMainPageFolderSet();
-                    Finish();
+                    // Never finish for default folder setup errors
+                    System.Diagnostics.Debug.WriteLine("Default folder setup error, staying in app");
                 }
                 else
                 {
-                    // Changed: Use Finish() instead of FinishAffinity()
-                    Finish();
+                    if (_wasLaunchedForFolderSelection)
+                    {
+                        Finish();
+                    }
                 }
             }
         }
@@ -202,7 +204,6 @@ namespace Screenshot_Organiser
                 {
                     SetDefaultScreenshotFolder(folderPath);
                 }
-               
             }
             catch (Exception ex)
             {
@@ -218,8 +219,11 @@ namespace Screenshot_Organiser
                 {
                     Toast.MakeText(this, "Screenshot no longer exists", ToastLength.Short)?.Show();
                     ClearPendingScreenshot();
-                    // Changed: Use Finish() instead of FinishAffinity()
-                    Finish();
+
+                    if (_wasLaunchedForFolderSelection)
+                    {
+                        Finish();
+                    }
                     return;
                 }
 
@@ -233,8 +237,11 @@ namespace Screenshot_Organiser
             {
                 Toast.MakeText(this, $"Error: {ex.Message}", ToastLength.Long)?.Show();
                 ClearPendingScreenshot();
-                // Changed: Use Finish() instead of FinishAffinity()
-                Finish();
+
+                if (_wasLaunchedForFolderSelection)
+                {
+                    Finish();
+                }
             }
         }
 
@@ -304,15 +311,21 @@ namespace Screenshot_Organiser
 
                 Toast.MakeText(this, $"✅ Screenshot moved to {Path.GetFileName(destinationFolder)}",
                     ToastLength.Long)?.Show();
-                // Changed: Use Finish() instead of FinishAffinity()
-                Finish();
+
+                if (_wasLaunchedForFolderSelection)
+                {
+                    Finish();
+                }
             }
             catch (Exception ex)
             {
                 ShowToast($"❌ Failed to move: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"❌ Move error: {ex.Message}");
-                // Changed: Use Finish() instead of FinishAffinity()
-                Finish();
+
+                if (_wasLaunchedForFolderSelection)
+                {
+                    Finish();
+                }
             }
         }
 
@@ -327,8 +340,6 @@ namespace Screenshot_Organiser
                 System.Diagnostics.Debug.WriteLine($"Error showing toast: {ex.Message}");
             }
         }
-
-        
 
         protected override void OnResume()
         {
