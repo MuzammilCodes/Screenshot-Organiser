@@ -158,9 +158,22 @@ public partial class MainPage : ContentPage
                 await Task.Delay(1000);
 
                 // Now setup default folder if both permissions are granted
+                // BUT only if we're not already in the middle of folder setup
                 if (_hasOverlayPermission && _hasPermissions)
                 {
-                    await CheckAndSetupDefaultFolder();
+                    // Check if folder picker is already open or folder setup is in progress
+                    var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+                    var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
+                    var folderSetupInProgress = prefs?.GetBoolean("folder_setup_in_progress", false) ?? false;
+
+                    if (!folderSetupInProgress)
+                    {
+                        await CheckAndSetupDefaultFolder();
+                    }
+                    else
+                    {
+                        Console.WriteLine("📁 Folder setup already in progress, skipping duplicate call");
+                    }
                 }
             }
 
@@ -375,6 +388,11 @@ public partial class MainPage : ContentPage
     {
         try
         {
+            // Set flag to indicate folder setup is in progress
+            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+            var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
+            prefs?.Edit()?.PutBoolean("folder_setup_in_progress", true)?.Apply();
+
             System.Diagnostics.Debug.WriteLine("Showing default folder setup dialog");
 
             bool setupFolder = await DisplayAlert("Setup Default Screenshot Folder",
@@ -385,22 +403,27 @@ public partial class MainPage : ContentPage
 
             if (setupFolder)
             {
-                // This will be handled by MainActivity - we'll send an intent
                 await OpenDefaultFolderPicker();
             }
             else
             {
-                // Set common default screenshot path
                 SetDefaultScreenshotFolder("/storage/emulated/0/Pictures/Screenshots");
-                _defaultFolderSetupComplete = true; // Mark as complete
+                _defaultFolderSetupComplete = true;
+
+                // Clear the in-progress flag
+                prefs?.Edit()?.PutBoolean("folder_setup_in_progress", false)?.Apply();
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Default folder setup error: {ex}");
-            // Fallback to default
             SetDefaultScreenshotFolder("/storage/emulated/0/Pictures/Screenshots");
-            _defaultFolderSetupComplete = true; // Mark as complete even on error
+            _defaultFolderSetupComplete = true;
+
+            // Clear the in-progress flag on error
+            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+            var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
+            prefs?.Edit()?.PutBoolean("folder_setup_in_progress", false)?.Apply();
         }
     }
 
@@ -447,6 +470,12 @@ public partial class MainPage : ContentPage
     public void OnDefaultFolderSet()
     {
         _defaultFolderSetupComplete = true;
+
+        // Clear the in-progress flag
+        var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+        var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
+        prefs?.Edit()?.PutBoolean("folder_setup_in_progress", false)?.Apply();
+
         MainThread.BeginInvokeOnMainThread(() =>
         {
             StatusLabel.Text = "Status: ✅ All permissions granted - Ready to monitor";
