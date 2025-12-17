@@ -314,7 +314,7 @@ namespace Screenshot_Organiser
 
                 if (_wasLaunchedForFolderSelection)
                 {
-                    Finish();
+                    FinishAndRemoveTask();
                 }
             }
             catch (Exception ex)
