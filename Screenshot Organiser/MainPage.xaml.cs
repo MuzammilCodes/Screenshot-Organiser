@@ -1,4 +1,6 @@
-﻿namespace Screenshot_Organiser;
+﻿using Android.Content;
+
+namespace Screenshot_Organiser;
 
 public partial class MainPage : ContentPage
 {
@@ -276,11 +278,19 @@ public partial class MainPage : ContentPage
             _overlayPermissionRequested = true;
 
             var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-            var intent = new Android.Content.Intent(Android.Provider.Settings.ActionManageOverlayPermission);
+
+            var intent = new Android.Content.Intent(
+    Android.Provider.Settings.ActionManageOverlayPermission);
+
             intent.SetData(Android.Net.Uri.Parse($"package:{context.PackageName}"));
-            // Changed: Remove problematic flags that affect recent apps
+
             intent.AddFlags(Android.Content.ActivityFlags.NewTask);
+            intent.AddFlags(Android.Content.ActivityFlags.NoHistory);          
+            intent.AddFlags(Android.Content.ActivityFlags.ExcludeFromRecents);
+
             Platform.CurrentActivity?.StartActivity(intent);
+
+
 
             System.Diagnostics.Debug.WriteLine("Opened overlay permission settings");
         }
@@ -312,8 +322,9 @@ public partial class MainPage : ContentPage
 
                     var intent = new Android.Content.Intent(Android.Provider.Settings.ActionManageAppAllFilesAccessPermission);
                     intent.SetData(Android.Net.Uri.Parse($"package:{context.PackageName}"));
-                    // Changed: Remove the flags that were causing issues with recent apps
-                    intent.AddFlags(Android.Content.ActivityFlags.NewTask);
+                    intent.AddFlags(ActivityFlags.NewTask);
+                    intent.AddFlags(ActivityFlags.NoHistory);
+                    intent.AddFlags(ActivityFlags.ExcludeFromRecents);
 
                     Platform.CurrentActivity?.StartActivity(intent);
                     System.Diagnostics.Debug.WriteLine("Opened MANAGE_EXTERNAL_STORAGE permission settings");
