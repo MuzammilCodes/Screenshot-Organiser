@@ -65,6 +65,10 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
 
     public bool IsMonitoring => _monitor?.IsMonitoring ?? false;
 
+    public bool CanToggleMonitoring =>
+    HasOverlayPermission &&
+    HasFilePermission &&
+    _defaultFolderSetupComplete;
 
     public bool MonitorToggle
     {
@@ -426,6 +430,7 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
     private void UpdateComputedStates()
     {
         OnPropertyChanged(nameof(CanStartMonitoring));
+        OnPropertyChanged(nameof(CanToggleMonitoring));
         OnPropertyChanged(nameof(IsMonitoring));
     }
 

@@ -114,7 +114,7 @@
                         <Switch
                             Grid.Column="1"
                             IsToggled="{Binding MonitorToggle}"
-                            IsEnabled="{Binding CanStartMonitoring}"
+                            IsEnabled="{Binding CanToggleMonitoring}"
                             OnColor="#2563EB"
                             ThumbColor="#1E293B"
                             VerticalOptions="Center" />
