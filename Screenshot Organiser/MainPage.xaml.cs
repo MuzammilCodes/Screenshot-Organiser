@@ -1,552 +1,468 @@
 ﻿using Android.Content;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Windows.Input;
 
 namespace Screenshot_Organiser;
 
-public partial class MainPage : ContentPage
+public partial class MainPage : ContentPage, INotifyPropertyChanged
 {
     private readonly ModernScreenshotMonitor _monitor;
-    private bool _hasPermissions = false;
-    private bool _hasOverlayPermission = false;
-    private bool _permissionsRequested = false;
-    private bool _overlayPermissionRequested = false;
-    private bool _filePermissionRequested = false;
-    private bool _initialLoadComplete = false;
-    private bool _defaultFolderSetupComplete = false; // New flag to prevent double folder setup
+    private const string FolderSetupInProgressKey = "folder_setup_in_progress";
+
+    private const int InitialDelayMs = 600;
+    private const int AfterPermissionGrantedDelayMs = 800;
+
+    private bool _hasPermissions;
+    private bool _hasOverlayPermission;
+    private bool _permissionsRequested;
+    private bool _overlayPermissionRequested;
+    private bool _filePermissionRequested;
+    private bool _initialLoadComplete;
+    private bool _defaultFolderSetupComplete;
+    private bool _monitorToggle;
+
 
     public MainPage()
     {
         InitializeComponent();
+
         _monitor = new ModernScreenshotMonitor();
+        BindingContext = this;
     }
+
+
+    #region Bindable Properties (UI)
+
+    public bool HasOverlayPermission
+    {
+        get => _hasOverlayPermission;
+        set
+        {
+            if (_hasOverlayPermission != value)
+            {
+                _hasOverlayPermission = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public bool HasFilePermission
+    {
+        get => _hasPermissions;
+        set
+        {
+            if (_hasPermissions != value)
+            {
+                _hasPermissions = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public bool CanStartMonitoring =>
+        HasOverlayPermission && HasFilePermission && _defaultFolderSetupComplete && !_monitor.IsMonitoring;
+
+    public bool HasDefaultFolder =>
+    _defaultFolderSetupComplete;
+
+    public bool IsMonitoring => _monitor?.IsMonitoring ?? false;
+
+    public bool CanToggleMonitoring =>
+    HasOverlayPermission &&
+    HasFilePermission &&
+    _defaultFolderSetupComplete;
+
+    public bool MonitorToggle
+    {
+        get => _monitorToggle;
+        set
+        {
+            if (_monitorToggle == value)
+                return;
+
+            _monitorToggle = value;
+            OnPropertyChanged();
+
+            // 🔁 React to toggle change
+            _ = HandleMonitoringToggleAsync(value);
+        }
+    }
+
+
+    #endregion
+
+    #region Commands (Card Taps)
+
+    public ICommand OpenOverlayPermissionCommand =>
+        new Command(async () =>
+        {
+            if (HasOverlayPermission)
+                return;
+
+            await OpenOverlayPermissionSettings();
+        });
+
+
+    public ICommand OpenFilePermissionCommand =>
+        new Command(async () =>
+        {
+            if (HasFilePermission)
+                return;
+
+            await OpenFilePermissionSettings();
+        });
+
+    public ICommand OpenDefaultFolderCommand =>
+        new Command(async () =>
+        {
+            if (_defaultFolderSetupComplete)
+                return;
+
+            await CheckAndSetupDefaultFolder();
+        });
+
+
+
+    public ICommand StartMonitoringCommand =>
+        new Command(async () => await StartMonitoring(), () => CanStartMonitoring);
+
+    public ICommand StopMonitoringCommand =>
+        new Command(async () => await StopMonitoring(), () => IsMonitoring);
+
+    #endregion
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
 
-        // Only run initial setup once
-        if (!_initialLoadComplete)
+        if (_initialLoadComplete)
+            return;
+
+        _initialLoadComplete = true;
+        await Task.Delay(InitialDelayMs);
+
+        if (!_permissionsRequested)
         {
-            _initialLoadComplete = true;
-
-            // Wait for UI to fully load
-            await Task.Delay(1000);
-
-            if (!_permissionsRequested)
-            {
-                _permissionsRequested = true;
-                await RequestPermissionsSequentially();
-            }
+            _permissionsRequested = true;
+            await RequestPermissionsSequentially();
         }
     }
 
-    // This method will be called by the lifecycle event when app resumes
     public async void OnAppResumed()
     {
-        try
-        {
-            Console.WriteLine("🔄 MainPage handling app resume");
-
-            // Only process if we've already started the permission flow
-            if (_permissionsRequested)
-            {
-                await CheckPermissionsAndContinueFlow();
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error in OnAppResumed: {ex}");
-        }
+        if (_permissionsRequested)
+            await CheckPermissionsAndContinueFlow();
     }
+
+    #region Permission Flow
 
     private async Task RequestPermissionsSequentially()
     {
-        try
+        await CheckPermissions();
+
+        if (!HasOverlayPermission && !_overlayPermissionRequested)
         {
-            StatusLabel.Text = "Status: 🔄 Checking permissions...";
-
-            // Step 1: Check current permissions
-            await CheckPermissions();
-            await Task.Delay(500);
-
-            // Step 2: Request overlay permission if not granted
-            if (!_hasOverlayPermission && !_overlayPermissionRequested)
-            {
-                StatusLabel.Text = "Status: 🔒 Opening overlay permission settings...";
-                await Task.Delay(500);
-                await OpenOverlayPermissionSettings();
-                return; // Exit here, will continue when user returns to app
-            }
-
-            // Step 3: Request file access permissions if not granted
-            if (!_hasPermissions && !_filePermissionRequested)
-            {
-                StatusLabel.Text = "Status: 🔒 Opening file permission settings...";
-                await Task.Delay(500);
-                await OpenFilePermissionSettings();
-                return; // Exit here, will continue when user returns to app
-            }
-
-            // Step 4: Check if default screenshot folder is set, if not show setup dialog
-            if (_hasPermissions && _hasOverlayPermission && !_defaultFolderSetupComplete)
-            {
-                StatusLabel.Text = "Status: 📁 Checking default folder...";
-                await Task.Delay(500);
-                await CheckAndSetupDefaultFolder();
-            }
-
-            // Step 5: Final permission check and UI update
-            await CheckPermissions();
-
-            if (_hasPermissions && _hasOverlayPermission)
-            {
-                StatusLabel.Text = "Status: ✅ All permissions granted - Ready to monitor";
-            }
+            await Task.Delay(InitialDelayMs);
+            await OpenOverlayPermissionSettings();
+            return;
         }
-        catch (Exception ex)
+
+        if (!HasFilePermission && !_filePermissionRequested)
         {
-            StatusLabel.Text = "Status: ❌ Permission setup failed";
-            System.Diagnostics.Debug.WriteLine($"Permission error: {ex}");
+            await OpenFilePermissionSettings();
+            return;
         }
+
+        if (HasOverlayPermission && HasFilePermission && !_defaultFolderSetupComplete)
+        {
+            await CheckAndSetupDefaultFolder();
+        }
+
     }
 
     private async Task CheckPermissionsAndContinueFlow()
     {
-        try
+        await CheckPermissions();
+
+        if (_overlayPermissionRequested && HasOverlayPermission && !_filePermissionRequested)
         {
-            Console.WriteLine("🔍 Checking permissions after app resume");
-            await CheckPermissions();
-
-            Console.WriteLine($"📊 Current status - Overlay requested: {_overlayPermissionRequested}, Overlay granted: {_hasOverlayPermission}");
-            Console.WriteLine($"📊 Current status - File requested: {_filePermissionRequested}, File granted: {_hasPermissions}");
-
-            // Step 1: If we just requested overlay permission and it's now granted, continue to file permissions
-            if (_overlayPermissionRequested && _hasOverlayPermission && !_filePermissionRequested)
+            if (!HasFilePermission)
             {
-                StatusLabel.Text = "Status: ✅ Overlay permission granted";
-                await Task.Delay(1000);
+                await Task.Delay(AfterPermissionGrantedDelayMs);
 
-                // Now request file permissions
-                if (!_hasPermissions)
-                {
-                    StatusLabel.Text = "Status: 🔒 Opening file permission settings...";
-                    await Task.Delay(500);
-                    await OpenFilePermissionSettings();
-                    return; // Exit here, will continue when user returns
-                }
-            }
-
-            // Step 2: If overlay wasn't requested yet but we need it
-            if (!_overlayPermissionRequested && !_hasOverlayPermission)
-            {
-                StatusLabel.Text = "Status: 🔒 Opening overlay permission settings...";
-                await Task.Delay(500);
-                await OpenOverlayPermissionSettings();
-                return;
-            }
-
-            // Step 3: If overlay is granted but file permissions not requested yet
-            if (_hasOverlayPermission && !_filePermissionRequested && !_hasPermissions)
-            {
-                StatusLabel.Text = "Status: 🔒 Opening file permission settings...";
-                await Task.Delay(500);
                 await OpenFilePermissionSettings();
                 return;
             }
-
-            // Step 4: If we just requested file permission and it's now granted
-            if (_filePermissionRequested && _hasPermissions && !_defaultFolderSetupComplete)
-            {
-                StatusLabel.Text = "Status: ✅ File permissions granted";
-                await Task.Delay(1000);
-
-                // Now setup default folder if both permissions are granted
-                // BUT only if we're not already in the middle of folder setup
-                if (_hasOverlayPermission && _hasPermissions)
-                {
-                    // Check if folder picker is already open or folder setup is in progress
-                    var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-                    var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
-                    var folderSetupInProgress = prefs?.GetBoolean("folder_setup_in_progress", false) ?? false;
-
-                    if (!folderSetupInProgress)
-                    {
-                        await CheckAndSetupDefaultFolder();
-                    }
-                    else
-                    {
-                        Console.WriteLine("📁 Folder setup already in progress, skipping duplicate call");
-                    }
-                }
-            }
-
-            // Step 5: Final check - if all permissions are granted and folder setup is complete
-            if (_hasPermissions && _hasOverlayPermission && _defaultFolderSetupComplete)
-            {
-                StatusLabel.Text = "Status: ✅ All permissions granted - Ready to monitor";
-                UpdateUI(); // Make sure UI is updated
-            }
-
-            Console.WriteLine($"📊 Final status - Overlay: {_hasOverlayPermission}, Files: {_hasPermissions}, Folder Setup: {_defaultFolderSetupComplete}");
         }
-        catch (Exception ex)
+
+        if (HasOverlayPermission && HasFilePermission && !_defaultFolderSetupComplete)
         {
-            StatusLabel.Text = "Status: ❌ Permission check failed";
-            System.Diagnostics.Debug.WriteLine($"Permission check error: {ex}");
+            await Task.Delay(AfterPermissionGrantedDelayMs);
+            await CheckAndSetupDefaultFolder();
         }
+
     }
 
     private async Task CheckPermissions()
     {
-        try
+        if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.R)
         {
-            Console.WriteLine("🔍 Starting permission check...");
-
-            // For Android 11+ (API 30+), prioritize MANAGE_EXTERNAL_STORAGE
-            if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.R)
-            {
-                bool hasManageExternal = Android.OS.Environment.IsExternalStorageManager;
-                Console.WriteLine($"📱 Android 11+ - MANAGE_EXTERNAL_STORAGE: {hasManageExternal}");
-
-                if (hasManageExternal)
-                {
-                    _hasPermissions = true;
-                    Console.WriteLine("✅ File permissions granted via MANAGE_EXTERNAL_STORAGE");
-                }
-                else
-                {
-                    _hasPermissions = false;
-                    Console.WriteLine("❌ MANAGE_EXTERNAL_STORAGE not granted");
-                }
-            }
-            else
-            {
-                // For Android 10 and below, check Photos/Media permissions
-                var photoPermission = await Permissions.CheckStatusAsync<Permissions.Photos>();
-                var mediaPermission = await Permissions.CheckStatusAsync<Permissions.Media>();
-
-                _hasPermissions = photoPermission == PermissionStatus.Granted ||
-                                 mediaPermission == PermissionStatus.Granted;
-
-                Console.WriteLine($"📱 Android 10 or below:");
-                Console.WriteLine($"   📸 Photo permission: {photoPermission}");
-                Console.WriteLine($"   🎬 Media permission: {mediaPermission}");
-                Console.WriteLine($"   📁 Has file permissions: {_hasPermissions}");
-            }
-
-            // Check overlay permission
-            _hasOverlayPermission = CheckOverlayPermission();
-
-            Console.WriteLine($"📊 Final permission status:");
-            Console.WriteLine($"   📁 File permissions: {_hasPermissions}");
-            Console.WriteLine($"   🔲 Overlay permission: {_hasOverlayPermission}");
-
-            // Update UI on main thread
-            MainThread.BeginInvokeOnMainThread(() => UpdateUI());
+            HasFilePermission = Android.OS.Environment.IsExternalStorageManager;
         }
-        catch (Exception ex)
+        else
         {
-            Console.WriteLine($"❌ Permission check error: {ex}");
-            System.Diagnostics.Debug.WriteLine($"Permission check error: {ex}");
+            var photo = await Permissions.CheckStatusAsync<Permissions.Photos>();
+            var media = await Permissions.CheckStatusAsync<Permissions.Media>();
+
+            HasFilePermission =
+                photo == PermissionStatus.Granted ||
+                media == PermissionStatus.Granted;
         }
+
+        HasOverlayPermission = CheckOverlayPermission();
+
+        UpdateComputedStates();
+        MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
     }
 
     private bool CheckOverlayPermission()
     {
 #if ANDROID
-        try
-        {
-            if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.M)
-            {
-                var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-                bool hasPermission = Android.Provider.Settings.CanDrawOverlays(context);
-                return hasPermission;
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error checking overlay permission: {ex.Message}");
-        }
-#endif
+        var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+        return Android.Provider.Settings.CanDrawOverlays(context);
+#else
         return true;
+#endif
     }
+
+    #endregion
+
+    #region Open Permission Screens
 
     private async Task OpenOverlayPermissionSettings()
     {
 #if ANDROID
-        try
-        {
-            _overlayPermissionRequested = true;
+        _overlayPermissionRequested = true;
 
-            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+        var context = Platform.CurrentActivity ?? Android.App.Application.Context;
 
-            var intent = new Android.Content.Intent(
-    Android.Provider.Settings.ActionManageOverlayPermission);
+        var intent = new Intent(
+            Android.Provider.Settings.ActionManageOverlayPermission);
 
-            intent.SetData(Android.Net.Uri.Parse($"package:{context.PackageName}"));
+        intent.SetData(Android.Net.Uri.Parse($"package:{context.PackageName}"));
+        intent.AddFlags(ActivityFlags.NewTask);
+        intent.AddFlags(ActivityFlags.NoHistory);
+        intent.AddFlags(ActivityFlags.ExcludeFromRecents);
 
-            intent.AddFlags(Android.Content.ActivityFlags.NewTask);
-            intent.AddFlags(Android.Content.ActivityFlags.NoHistory);          
-            intent.AddFlags(Android.Content.ActivityFlags.ExcludeFromRecents);
-
-            Platform.CurrentActivity?.StartActivity(intent);
-
-
-
-            System.Diagnostics.Debug.WriteLine("Opened overlay permission settings");
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error opening overlay settings: {ex.Message}");
-            StatusLabel.Text = "Status: Failed to open overlay settings";
-        }
+        Platform.CurrentActivity?.StartActivity(intent);
 #endif
+        await Task.CompletedTask;
     }
 
     private async Task OpenFilePermissionSettings()
     {
 #if ANDROID
-        try
+        _filePermissionRequested = true;
+
+        var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+
+        if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.R)
         {
-            _filePermissionRequested = true;
-
-            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-            Console.WriteLine($"Android SDK: {Android.OS.Build.VERSION.SdkInt}");
-            Console.WriteLine($"Current MANAGE_EXTERNAL_STORAGE status: {Android.OS.Environment.IsExternalStorageManager}");
-
-            // For Android 11 and above, MUST use MANAGE_EXTERNAL_STORAGE
-            if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.R)
+            if (!Android.OS.Environment.IsExternalStorageManager)
             {
-                if (!Android.OS.Environment.IsExternalStorageManager)
-                {
-                    Console.WriteLine("Opening MANAGE_EXTERNAL_STORAGE settings...");
+                var intent = new Intent(
+                    Android.Provider.Settings.ActionManageAppAllFilesAccessPermission);
 
-                    var intent = new Android.Content.Intent(Android.Provider.Settings.ActionManageAppAllFilesAccessPermission);
-                    intent.SetData(Android.Net.Uri.Parse($"package:{context.PackageName}"));
-                    intent.AddFlags(ActivityFlags.NewTask);
-                    intent.AddFlags(ActivityFlags.NoHistory);
-                    intent.AddFlags(ActivityFlags.ExcludeFromRecents);
+                intent.SetData(Android.Net.Uri.Parse($"package:{context.PackageName}"));
+                intent.AddFlags(ActivityFlags.NewTask);
+                intent.AddFlags(ActivityFlags.NoHistory);
+                intent.AddFlags(ActivityFlags.ExcludeFromRecents);
 
-                    Platform.CurrentActivity?.StartActivity(intent);
-                    System.Diagnostics.Debug.WriteLine("Opened MANAGE_EXTERNAL_STORAGE permission settings");
-                    return;
-                }
-                else
-                {
-                    Console.WriteLine("MANAGE_EXTERNAL_STORAGE already granted");
-                    _hasPermissions = true;
-                    return;
-                }
-            }
-
-            // For Android 10 and below, request photo/media permissions
-            Console.WriteLine("Android 10 or below - requesting Photo/Media permissions");
-
-            var photoStatus = await Permissions.RequestAsync<Permissions.Photos>();
-            var mediaStatus = await Permissions.RequestAsync<Permissions.Media>();
-
-            Console.WriteLine($"Photo permission result: {photoStatus}");
-            Console.WriteLine($"Media permission result: {mediaStatus}");
-
-            _hasPermissions = photoStatus == PermissionStatus.Granted ||
-                             mediaStatus == PermissionStatus.Granted;
-
-            Console.WriteLine($"Final file permissions status: {_hasPermissions}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error in OpenFilePermissionSettings: {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"Error opening file settings: {ex.Message}");
-            StatusLabel.Text = "Status: Failed to open file settings";
-        }
-#endif
-    }
-
-    private async Task CheckAndSetupDefaultFolder()
-    {
-        try
-        {
-            // Check if folder setup is already complete
-            if (_defaultFolderSetupComplete)
-            {
-                Console.WriteLine("📁 Default folder setup already completed, skipping...");
-                return;
-            }
-
-            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-            var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
-            var defaultFolder = prefs?.GetString("default_screenshot_folder", null);
-
-            System.Diagnostics.Debug.WriteLine($"Current default folder: {defaultFolder}");
-
-            if (string.IsNullOrEmpty(defaultFolder))
-            {
-                await ShowDefaultFolderSetupDialog();
+                Platform.CurrentActivity?.StartActivity(intent);
             }
             else
             {
-                // Folder is already set, mark as complete
-                _defaultFolderSetupComplete = true;
-                Console.WriteLine("📁 Default folder already configured");
+                HasFilePermission = true;
             }
         }
-        catch (Exception ex)
+        else
         {
-            System.Diagnostics.Debug.WriteLine($"Default folder check error: {ex}");
+            var photo = await Permissions.RequestAsync<Permissions.Photos>();
+            var media = await Permissions.RequestAsync<Permissions.Media>();
+
+            HasFilePermission =
+                photo == PermissionStatus.Granted ||
+                media == PermissionStatus.Granted;
         }
+#endif
+        await Task.CompletedTask;
+    }
+
+    #endregion
+
+    #region Default Folder
+
+    private async Task CheckAndSetupDefaultFolder()
+    {
+        if (_defaultFolderSetupComplete)
+            return;
+
+        var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+        var prefs = context.GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
+
+        // 🔒 CRITICAL: prevent double popup
+        var folderSetupInProgress =
+            prefs?.GetBoolean(FolderSetupInProgressKey, false) ?? false;
+
+        if (folderSetupInProgress)
+        {
+            System.Diagnostics.Debug.WriteLine("📁 Folder setup already in progress, skipping...");
+            return;
+        }
+
+        var folder = prefs?.GetString("default_screenshot_folder", null);
+
+        if (!string.IsNullOrEmpty(folder))
+        {
+            _defaultFolderSetupComplete = true;
+            return;
+        }
+
+        // 🔒 Lock before showing dialog
+        prefs?.Edit()?.PutBoolean(FolderSetupInProgressKey, true)?.Apply();
+
+        await ShowDefaultFolderSetupDialog();
+
     }
 
     private async Task ShowDefaultFolderSetupDialog()
     {
+        var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+        var prefs = context.GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
+
         try
         {
-            // Set flag to indicate folder setup is in progress
-            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-            var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
-            prefs?.Edit()?.PutBoolean("folder_setup_in_progress", true)?.Apply();
+            bool choose = await DisplayAlert(
+                "Default Screenshot Folder",
+                "Select where screenshots are stored",
+                "Select Folder",
+                "Cancel");
 
-            System.Diagnostics.Debug.WriteLine("Showing default folder setup dialog");
 
-            bool setupFolder = await DisplayAlert("Setup Default Screenshot Folder",
-                "Please select the folder where your device saves screenshots (usually Pictures/Screenshots)",
-                "Select Folder", "Use Default");
-
-            System.Diagnostics.Debug.WriteLine($"User choice for folder setup: {setupFolder}");
-
-            if (setupFolder)
+            if (choose)
             {
                 await OpenDefaultFolderPicker();
             }
             else
             {
-                SetDefaultScreenshotFolder("/storage/emulated/0/Pictures/Screenshots");
-                _defaultFolderSetupComplete = true;
-
-                // Clear the in-progress flag
-                prefs?.Edit()?.PutBoolean("folder_setup_in_progress", false)?.Apply();
+                prefs?.Edit()?.PutBoolean(FolderSetupInProgressKey, false)?.Apply();
             }
         }
-        catch (Exception ex)
+        catch
         {
-            System.Diagnostics.Debug.WriteLine($"Default folder setup error: {ex}");
-            SetDefaultScreenshotFolder("/storage/emulated/0/Pictures/Screenshots");
-            _defaultFolderSetupComplete = true;
-
-            // Clear the in-progress flag on error
-            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-            var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
-            prefs?.Edit()?.PutBoolean("folder_setup_in_progress", false)?.Apply();
+            // 🔓 Clear lock on error
+            prefs?.Edit()?.PutBoolean(FolderSetupInProgressKey, false)?.Apply();
+            throw;
         }
     }
+
+
 
     private async Task OpenDefaultFolderPicker()
     {
 #if ANDROID
-        try
-        {
-            System.Diagnostics.Debug.WriteLine("Opening default folder picker");
+        var context = Platform.CurrentActivity ?? Android.App.Application.Context;
 
-            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-            var intent = new Android.Content.Intent(context, typeof(MainActivity));
-            intent.AddFlags(Android.Content.ActivityFlags.NewTask);
-            intent.PutExtra("action", "setup_default_folder");
-            context.StartActivity(intent);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Folder picker error: {ex}");
-            // Fallback to default
-            SetDefaultScreenshotFolder("/storage/emulated/0/Pictures/Screenshots");
-            _defaultFolderSetupComplete = true; // Mark as complete even on error
-        }
+        var intent = new Intent(context, typeof(MainActivity));
+        intent.AddFlags(ActivityFlags.NewTask);
+        intent.PutExtra("action", "setup_default_folder");
+
+        context.StartActivity(intent);
 #endif
+        await Task.CompletedTask;
     }
 
-    private void SetDefaultScreenshotFolder(string folderPath)
-    {
-        try
-        {
-            var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-            var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
-            prefs?.Edit()?.PutString("default_screenshot_folder", folderPath)?.Apply();
-
-            System.Diagnostics.Debug.WriteLine($"Set default folder to: {folderPath}");
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error setting default folder: {ex.Message}");
-        }
-    }
-
-    // Method to be called from MainActivity after successful folder selection
     public void OnDefaultFolderSet()
     {
         _defaultFolderSetupComplete = true;
 
-        // Clear the in-progress flag
         var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-        var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
-        prefs?.Edit()?.PutBoolean("folder_setup_in_progress", false)?.Apply();
+        var prefs = context.GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
 
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            StatusLabel.Text = "Status: ✅ All permissions granted - Ready to monitor";
-            UpdateUI();
-        });
+        // 🔓 CRITICAL
+        prefs?.Edit()?.PutBoolean(FolderSetupInProgressKey, false)?.Apply();
+
+        MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
     }
 
-    private async void OnStartMonitoringClicked(object sender, EventArgs e)
+
+
+    private void SetDefaultScreenshotFolder(string path)
     {
-        try
+        var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+        var prefs = context.GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
+
+        prefs?.Edit()?.PutString("default_screenshot_folder", path)?.Apply();
+    }
+
+    #endregion
+
+    #region Monitoring
+
+    private async Task HandleMonitoringToggleAsync(bool enabled)
+    {
+        // Safety: only allow ON if everything is ready
+        if (enabled)
         {
+            if (!CanStartMonitoring)
+            {
+                // Revert toggle if user tries early
+                _monitorToggle = false;
+                OnPropertyChanged(nameof(MonitorToggle));
+                return;
+            }
+
             await _monitor.StartMonitoring();
-            StatusLabel.Text = "Status: 👀 Monitoring active - Take a screenshot!";
-            UpdateUI();
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error starting monitoring: {ex}");
-        }
-    }
-
-    private async void OnStopMonitoringClicked(object sender, EventArgs e)
-    {
-        try
+        else
         {
             await _monitor.StopMonitoring();
-            StatusLabel.Text = "Status: ⏸️ Monitoring stopped";
-            UpdateUI();
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error stopping monitoring: {ex}");
-        }
+
+        MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
     }
 
-    private void UpdateUI()
+    private async Task StartMonitoring()
     {
-        var isMonitoring = _monitor.IsMonitoring;
-        var hasAllPermissions = _hasPermissions && _hasOverlayPermission && _defaultFolderSetupComplete;
+        await _monitor.StartMonitoring();
+        MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
 
-        StartMonitoringBtn.IsEnabled = hasAllPermissions && !isMonitoring;
-        StopMonitoringBtn.IsEnabled = isMonitoring;
-
-        StatusLabel.Text = (hasAllPermissions, isMonitoring) switch
-        {
-            (false, _) when !_hasOverlayPermission && !_overlayPermissionRequested => "Status: 🔒 Need overlay permission",
-            (false, _) when !_hasOverlayPermission && _overlayPermissionRequested => "Status: ⏳ Waiting for overlay permission",
-            (false, _) when !_hasPermissions && !_filePermissionRequested => "Status: 🔒 Need file permissions",
-            (false, _) when !_hasPermissions && _filePermissionRequested => "Status: ⏳ Waiting for file permissions",
-            (false, _) when !_defaultFolderSetupComplete => "Status: 📁 Setting up default folder...",
-            (true, false) => "Status: ✅ Ready to monitor",
-            (true, true) => "Status: 👀 Monitoring active"
-        };
-
-        // Hide the permissions button since permissions are requested automatically
-        if (PermissionsBtn != null)
-        {
-            PermissionsBtn.IsVisible = false;
-        }
-
-        System.Diagnostics.Debug.WriteLine($"UI Updated - All Permissions: {hasAllPermissions}, Monitoring: {isMonitoring}, Folder Setup: {_defaultFolderSetupComplete}");
     }
+
+    private async Task StopMonitoring()
+    {
+        await _monitor.StopMonitoring();
+        MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
+
+    }
+
+    #endregion  
+
+    #region Helpers
+
+    private void UpdateComputedStates()
+    {
+        OnPropertyChanged(nameof(CanStartMonitoring));
+        OnPropertyChanged(nameof(CanToggleMonitoring));
+        OnPropertyChanged(nameof(IsMonitoring));
+        OnPropertyChanged(nameof(HasDefaultFolder));
+    }
+
+    public new event PropertyChangedEventHandler? PropertyChanged;
+
+    protected void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+    #endregion
 }
