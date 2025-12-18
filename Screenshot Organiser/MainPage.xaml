@@ -63,22 +63,18 @@
                     </VerticalStackLayout>
 
                     <!-- Checkmark -->
-                    <Frame
-                        Grid.Column="2"
-                        WidthRequest="28"
-                        HeightRequest="28"
-                        CornerRadius="14"
-                        BackgroundColor="#16A34A"
-                        IsVisible="{Binding HasOverlayPermission}"
-                        VerticalOptions="Center">
+                    <Label
+    Grid.Column="2"
+    Text="✓"
+    FontSize="20"
+    FontAttributes="Bold"
+    TextColor="#16A34A"
+    VerticalOptions="Center"
+    HorizontalOptions="End"
+    Margin="0,0,15,0"
+    IsVisible="{Binding HasOverlayPermission}" />
 
-                        <Label
-                            Text="✓"
-                            TextColor="White"
-                            FontSize="16"
-                            HorizontalTextAlignment="Center"
-                            VerticalTextAlignment="Center" />
-                    </Frame>
+
 
                 </Grid>
 
@@ -119,22 +115,18 @@
                             TextColor="#64748B" />
                     </VerticalStackLayout>
 
-                    <Frame
-                        Grid.Column="2"
-                        WidthRequest="28"
-                        HeightRequest="28"
-                        CornerRadius="14"
-                        BackgroundColor="#16A34A"
-                        IsVisible="{Binding HasFilePermission}"
-                        VerticalOptions="Center">
 
-                        <Label
-                            Text="✓"
-                            TextColor="White"
-                            FontSize="16"
-                            HorizontalTextAlignment="Center"
-                            VerticalTextAlignment="Center" />
-                    </Frame>
+                    <Label
+    Grid.Column="2"
+    Text="✓"
+    FontSize="20"
+    FontAttributes="Bold"
+    TextColor="#16A34A"
+    VerticalOptions="Center"
+    HorizontalOptions="End"
+    Margin="0,0,15,0"
+    IsVisible="{Binding HasFilePermission}" />
+
 
                 </Grid>
 
@@ -143,29 +135,41 @@
                 </Frame.GestureRecognizers>
             </Frame>
 
-            <!-- Action Buttons -->
-            <VerticalStackLayout Spacing="12" Margin="0,10,0,0">
+            <!-- Monitor Screenshots Card -->
+            <Frame
+    BackgroundColor="White"
+    CornerRadius="16"
+    HasShadow="True"
+    Padding="16">
 
-                <Button
-                    Text="Start Monitoring"
-                    Command="{Binding StartMonitoringCommand}"
-                    IsEnabled="{Binding CanStartMonitoring}"
-                    BackgroundColor="#2563EB"
-                    TextColor="White"
-                    CornerRadius="14"
-                    HeightRequest="52"
-                    FontSize="16" />
+                <Grid ColumnDefinitions="*,Auto" VerticalOptions="Center">
 
-                <Button
-                    Text="Stop Monitoring"
-                    Command="{Binding StopMonitoringCommand}"
-                    IsEnabled="{Binding IsMonitoring}"
-                    BackgroundColor="#DC2626"
-                    TextColor="White"
-                    CornerRadius="14"
-                    HeightRequest="52"
-                    FontSize="16" />
-            </VerticalStackLayout>
+                    <!-- Text -->
+                    <VerticalStackLayout Spacing="4">
+                        <Label
+                Text="Monitor Screenshots"
+                FontSize="16"
+                FontAttributes="Bold"
+                TextColor="#1E293B" />
+
+                        <Label
+                Text="Automatically organize screenshots"
+                FontSize="13"
+                TextColor="#64748B" />
+                    </VerticalStackLayout>
+
+                    <!-- Toggle Switch -->
+                    <Switch
+    Grid.Column="1"
+    IsToggled="{Binding MonitorToggle}"
+    IsEnabled="{Binding CanStartMonitoring}"
+    OnColor="#2563EB"
+    ThumbColor="#1E293B"
+    VerticalOptions="Center" />
+
+                </Grid>
+            </Frame>
+
 
             <!-- How it works -->
             <Frame
