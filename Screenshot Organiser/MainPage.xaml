@@ -1,64 +1,193 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="Screenshot_Organiser.MainPage"
-             Title="Screenshot Organizer">
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="Screenshot_Organiser.MainPage"
+    Title="Screenshot Organizer"
+    BackgroundColor="#F8FAFC">
 
     <ScrollView>
-        <VerticalStackLayout Spacing="25" Padding="30,0" VerticalOptions="Center">
+        <VerticalStackLayout Padding="16" Spacing="20">
 
-            <Image
-                Source="dotnet_bot.png"
-                HeightRequest="185"
-                Aspect="AspectFit"
-                SemanticProperties.Description="Cute dot net bot waving hi to you!" />
+            <!-- Header / Illustration -->
+            <VerticalStackLayout Spacing="12" HorizontalOptions="Center">
+                <Image
+                    Source="organize_illustration.svg"
+                    HeightRequest="160"
+                    Aspect="AspectFit" />
 
-            <Label 
-                x:Name="StatusLabel"
-                Text="Status: 🔄 Checking permissions..."
-                FontSize="18"
-                HorizontalOptions="Center" />
+                <Label
+                    Text="Organize your screenshots automatically"
+                    FontSize="18"
+                    FontAttributes="Bold"
+                    TextColor="#0F172A"
+                    HorizontalTextAlignment="Center" />
 
-            <!-- Permissions Button - Hidden by default since permissions are requested automatically -->
-            <Button 
-                x:Name="PermissionsBtn"
-                Text="🔐 Grant Permissions"
-                IsVisible="False"
-                FontSize="16"
-                BackgroundColor="DarkBlue"
-                TextColor="White" />
+                <Label
+                    Text="Grant permissions once and let the app do the rest"
+                    FontSize="14"
+                    TextColor="#64748B"
+                    HorizontalTextAlignment="Center" />
+            </VerticalStackLayout>
 
-            <Button 
-                x:Name="StartMonitoringBtn"
-                Text="▶️ Start Monitoring"
-                Clicked="OnStartMonitoringClicked"
-                FontSize="16"
-                BackgroundColor="Green"
-                TextColor="White"
-                IsEnabled="False" />
+            <!-- Overlay Permission Card -->
+            <Frame
+                BackgroundColor="White"
+                CornerRadius="16"
+                HasShadow="True"
+                Padding="16">
 
-            <Button 
-                x:Name="StopMonitoringBtn"
-                Text="⏹️ Stop Monitoring"
-                Clicked="OnStopMonitoringClicked"
-                FontSize="16"
-                BackgroundColor="Red"
-                TextColor="White"
-                IsEnabled="False" />
+                <Grid ColumnDefinitions="Auto,*,Auto" VerticalOptions="Center">
 
-            <Label 
-                Text="📱 How it works:"
-                FontSize="16"
-                FontAttributes="Bold"
-                HorizontalOptions="Center" />
+                    <Image
+                        Source="overlay_icon.svg"
+                        WidthRequest="32"
+                        HeightRequest="32"
+                        VerticalOptions="Center" />
 
-            <Label 
-                Text="1. Grant the required permissions when prompted&#x0a;2. Select your default screenshot folder&#x0a;3. Start monitoring&#x0a;4. Take screenshots normally&#x0a;5. A dialog will appear to organize each screenshot"
-                FontSize="14"
-                HorizontalOptions="Center"
-                HorizontalTextAlignment="Center" />
+                    <VerticalStackLayout
+                        Grid.Column="1"
+                        Margin="12,0"
+                        Spacing="4">
+
+                        <Label
+                            Text="Overlay Permission"
+                            FontSize="16"
+                            FontAttributes="Bold"
+                            TextColor="#1E293B" />
+
+                        <Label
+                            Text="Show popup over screenshots"
+                            FontSize="13"
+                            TextColor="#64748B" />
+                    </VerticalStackLayout>
+
+                    <!-- Checkmark -->
+                    <Frame
+                        Grid.Column="2"
+                        WidthRequest="28"
+                        HeightRequest="28"
+                        CornerRadius="14"
+                        BackgroundColor="#16A34A"
+                        IsVisible="{Binding HasOverlayPermission}"
+                        VerticalOptions="Center">
+
+                        <Label
+                            Text="✓"
+                            TextColor="White"
+                            FontSize="16"
+                            HorizontalTextAlignment="Center"
+                            VerticalTextAlignment="Center" />
+                    </Frame>
+
+                </Grid>
+
+                <Frame.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenOverlayPermissionCommand}" />
+                </Frame.GestureRecognizers>
+            </Frame>
+
+            <!-- All Files Permission Card -->
+            <Frame
+                BackgroundColor="White"
+                CornerRadius="16"
+                HasShadow="True"
+                Padding="16">
+
+                <Grid ColumnDefinitions="Auto,*,Auto" VerticalOptions="Center">
+
+                    <Image
+                        Source="folder_icon.svg"
+                        WidthRequest="32"
+                        HeightRequest="32"
+                        VerticalOptions="Center" />
+
+                    <VerticalStackLayout
+                        Grid.Column="1"
+                        Margin="12,0"
+                        Spacing="4">
+
+                        <Label
+                            Text="All Files Access"
+                            FontSize="16"
+                            FontAttributes="Bold"
+                            TextColor="#1E293B" />
+
+                        <Label
+                            Text="Required to move screenshots"
+                            FontSize="13"
+                            TextColor="#64748B" />
+                    </VerticalStackLayout>
+
+                    <Frame
+                        Grid.Column="2"
+                        WidthRequest="28"
+                        HeightRequest="28"
+                        CornerRadius="14"
+                        BackgroundColor="#16A34A"
+                        IsVisible="{Binding HasFilePermission}"
+                        VerticalOptions="Center">
+
+                        <Label
+                            Text="✓"
+                            TextColor="White"
+                            FontSize="16"
+                            HorizontalTextAlignment="Center"
+                            VerticalTextAlignment="Center" />
+                    </Frame>
+
+                </Grid>
+
+                <Frame.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenFilePermissionCommand}" />
+                </Frame.GestureRecognizers>
+            </Frame>
+
+            <!-- Action Buttons -->
+            <VerticalStackLayout Spacing="12" Margin="0,10,0,0">
+
+                <Button
+                    Text="Start Monitoring"
+                    Command="{Binding StartMonitoringCommand}"
+                    IsEnabled="{Binding CanStartMonitoring}"
+                    BackgroundColor="#2563EB"
+                    TextColor="White"
+                    CornerRadius="14"
+                    HeightRequest="52"
+                    FontSize="16" />
+
+                <Button
+                    Text="Stop Monitoring"
+                    Command="{Binding StopMonitoringCommand}"
+                    IsEnabled="{Binding IsMonitoring}"
+                    BackgroundColor="#DC2626"
+                    TextColor="White"
+                    CornerRadius="14"
+                    HeightRequest="52"
+                    FontSize="16" />
+            </VerticalStackLayout>
+
+            <!-- How it works -->
+            <Frame
+                BackgroundColor="White"
+                CornerRadius="16"
+                HasShadow="False"
+                Padding="16">
+
+                <VerticalStackLayout Spacing="8">
+                    <Label
+                        Text="How it works"
+                        FontAttributes="Bold"
+                        FontSize="16"
+                        TextColor="#0F172A" />
+
+                    <Label
+                        FontSize="14"
+                        TextColor="#475569"
+                        Text="1. Grant required permissions&#x0a;2. Select default screenshot folder&#x0a;3. Start monitoring&#x0a;4. Take screenshots&#x0a;5. Organize instantly" />
+                </VerticalStackLayout>
+            </Frame>
 
         </VerticalStackLayout>
     </ScrollView>
-
 </ContentPage>
