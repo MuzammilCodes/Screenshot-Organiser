@@ -20,6 +20,8 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
     private bool _filePermissionRequested;
     private bool _initialLoadComplete;
     private bool _defaultFolderSetupComplete;
+    private bool _monitorToggle;
+
 
     public MainPage()
     {
@@ -62,6 +64,24 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         HasOverlayPermission && HasFilePermission && _defaultFolderSetupComplete && !_monitor.IsMonitoring;
 
     public bool IsMonitoring => _monitor?.IsMonitoring ?? false;
+
+
+    public bool MonitorToggle
+    {
+        get => _monitorToggle;
+        set
+        {
+            if (_monitorToggle == value)
+                return;
+
+            _monitorToggle = value;
+            OnPropertyChanged();
+
+            // 🔁 React to toggle change
+            _ = HandleMonitoringToggleAsync(value);
+        }
+    }
+
 
     #endregion
 
@@ -361,6 +381,29 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
     #endregion
 
     #region Monitoring
+
+    private async Task HandleMonitoringToggleAsync(bool enabled)
+    {
+        // Safety: only allow ON if everything is ready
+        if (enabled)
+        {
+            if (!CanStartMonitoring)
+            {
+                // Revert toggle if user tries early
+                _monitorToggle = false;
+                OnPropertyChanged(nameof(MonitorToggle));
+                return;
+            }
+
+            await _monitor.StartMonitoring();
+        }
+        else
+        {
+            await _monitor.StopMonitoring();
+        }
+
+        MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
+    }
 
     private async Task StartMonitoring()
     {
