@@ -63,6 +63,9 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
     public bool CanStartMonitoring =>
         HasOverlayPermission && HasFilePermission && _defaultFolderSetupComplete && !_monitor.IsMonitoring;
 
+    public bool HasDefaultFolder =>
+    _defaultFolderSetupComplete;
+
     public bool IsMonitoring => _monitor?.IsMonitoring ?? false;
 
     public bool CanToggleMonitoring =>
@@ -92,10 +95,34 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
     #region Commands (Card Taps)
 
     public ICommand OpenOverlayPermissionCommand =>
-        new Command(async () => await OpenOverlayPermissionSettings());
+        new Command(async () =>
+        {
+            if (HasOverlayPermission)
+                return;
+
+            await OpenOverlayPermissionSettings();
+        });
+
 
     public ICommand OpenFilePermissionCommand =>
-        new Command(async () => await OpenFilePermissionSettings());
+        new Command(async () =>
+        {
+            if (HasFilePermission)
+                return;
+
+            await OpenFilePermissionSettings();
+        });
+
+    public ICommand OpenDefaultFolderCommand =>
+        new Command(async () =>
+        {
+            if (_defaultFolderSetupComplete)
+                return;
+
+            await CheckAndSetupDefaultFolder();
+        });
+
+
 
     public ICommand StartMonitoringCommand =>
         new Command(async () => await StartMonitoring(), () => CanStartMonitoring);
@@ -320,7 +347,8 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
                 "Default Screenshot Folder",
                 "Select where screenshots are stored",
                 "Select Folder",
-                "Use Default");
+                "Cancel");
+
 
             if (choose)
             {
@@ -328,10 +356,6 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
             }
             else
             {
-                SetDefaultScreenshotFolder("/storage/emulated/0/Pictures/Screenshots");
-                _defaultFolderSetupComplete = true;
-
-                // 🔓 Clear lock
                 prefs?.Edit()?.PutBoolean(FolderSetupInProgressKey, false)?.Apply();
             }
         }
@@ -423,7 +447,7 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
 
     }
 
-    #endregion
+    #endregion  
 
     #region Helpers
 
@@ -432,6 +456,7 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         OnPropertyChanged(nameof(CanStartMonitoring));
         OnPropertyChanged(nameof(CanToggleMonitoring));
         OnPropertyChanged(nameof(IsMonitoring));
+        OnPropertyChanged(nameof(HasDefaultFolder));
     }
 
     public new event PropertyChangedEventHandler? PropertyChanged;

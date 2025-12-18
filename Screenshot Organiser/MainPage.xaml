@@ -78,6 +78,10 @@
                             Margin="0,0,15,0"
                             IsVisible="{Binding HasOverlayPermission}" />
                     </Grid>
+                    <Frame.GestureRecognizers>
+                        <TapGestureRecognizer
+            Command="{Binding OpenOverlayPermissionCommand}" />
+                    </Frame.GestureRecognizers>
                 </Frame>
 
                 <!-- File Permission -->
@@ -101,7 +105,51 @@
                             Margin="0,0,15,0"
                             IsVisible="{Binding HasFilePermission}" />
                     </Grid>
+                    <Frame.GestureRecognizers>
+                        <TapGestureRecognizer
+            Command="{Binding OpenFilePermissionCommand}" />
+                    </Frame.GestureRecognizers>
                 </Frame>
+
+                <!-- Default Screenshot Folder -->
+                <Frame BackgroundColor="White" CornerRadius="16" HasShadow="True" Padding="16">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+
+                        <Image
+            Source="folder_icon.svg"
+            WidthRequest="32"
+            HeightRequest="32" />
+
+                        <VerticalStackLayout Grid.Column="1" Margin="12,0" Spacing="4">
+                            <Label
+                Text="Default Screenshot Folder"
+                FontSize="16"
+                FontAttributes="Bold"
+                TextColor="#1E293B" />
+
+                            <Label
+                Text="Choose where screenshots are read from"
+                FontSize="13"
+                TextColor="#64748B" />
+                        </VerticalStackLayout>
+
+                        <Label
+            Grid.Column="2"
+            Text="✓"
+            FontSize="20"
+            FontAttributes="Bold"
+            TextColor="#16A34A"
+            VerticalOptions="Center"
+            HorizontalOptions="End"
+            Margin="0,0,15,0"
+            IsVisible="{Binding HasDefaultFolder}" />
+                    </Grid>
+
+                    <Frame.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding OpenDefaultFolderCommand}" />
+                    </Frame.GestureRecognizers>
+                </Frame>
+
 
                 <!-- Monitor Toggle -->
                 <Frame BackgroundColor="White" CornerRadius="16" HasShadow="True" Padding="16">
