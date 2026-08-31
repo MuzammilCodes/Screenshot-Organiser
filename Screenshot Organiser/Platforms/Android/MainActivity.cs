@@ -70,12 +70,25 @@ namespace Screenshot_Organiser
             }
         }
 
+        private const string STORAGE_ROOT = "/storage/emulated/0";
+
         private void StartDefaultFolderPicker()
         {
             try
             {
-                var intent = new Intent(Intent.ActionOpenDocumentTree);
-                StartActivityForResult(intent, DEFAULT_FOLDER_PICKER_REQUEST);
+                ShowFolderPickerDialog(STORAGE_ROOT,
+                    onFolderSelected: folderPath =>
+                    {
+                        _isSettingDefaultFolder = false;
+                        SetDefaultScreenshotFolder(folderPath);
+                        NotifyMainPageFolderSet();
+                        System.Diagnostics.Debug.WriteLine("Default folder setup completed, staying in app");
+                    },
+                    onCancelled: () =>
+                    {
+                        _isSettingDefaultFolder = false;
+                        NotifyMainPageFolderSet();
+                    });
             }
             catch (Exception ex)
             {
@@ -89,14 +102,145 @@ namespace Screenshot_Organiser
         {
             try
             {
-                var intent = new Intent(Intent.ActionOpenDocumentTree);
-                StartActivityForResult(intent, FOLDER_PICKER_REQUEST);
+                ShowFolderPickerDialog(STORAGE_ROOT,
+                    onFolderSelected: async folderPath =>
+                    {
+                        _isWaitingForFolderPicker = false;
+                        await HandleFolderPathSelection(folderPath);
+                    },
+                    onCancelled: () =>
+                    {
+                        _isWaitingForFolderPicker = false;
+                        Toast.MakeText(this, "Folder selection cancelled", ToastLength.Short)?.Show();
+                        ClearPendingScreenshot();
+
+                        if (_wasLaunchedForFolderSelection)
+                        {
+                            Finish();
+                        }
+                    });
             }
             catch (Exception ex)
             {
                 Toast.MakeText(this, "Unable to open folder picker", ToastLength.Long)?.Show();
                 _isWaitingForFolderPicker = false;
                 Finish();
+            }
+        }
+
+        private void ShowFolderPickerDialog(string currentPath, Action<string> onFolderSelected, Action onCancelled)
+        {
+            try
+            {
+                string[] subFolders;
+                try
+                {
+                    subFolders = Directory.GetDirectories(currentPath)
+                        .Where(d => !Path.GetFileName(d).StartsWith("."))
+                        .OrderBy(d => Path.GetFileName(d), StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                }
+                catch
+                {
+                    subFolders = Array.Empty<string>();
+                }
+
+                bool canGoUp = !string.Equals(currentPath.TrimEnd('/'), STORAGE_ROOT, StringComparison.OrdinalIgnoreCase);
+
+                var items = new List<string>();
+                if (canGoUp) items.Add("⬆️ ..");
+                items.AddRange(subFolders.Select(d => "📁 " + Path.GetFileName(d)));
+
+                var builder = new AlertDialog.Builder(this);
+                builder.SetTitle(currentPath.Replace(STORAGE_ROOT, "Internal storage"));
+
+                builder.SetItems(items.ToArray(), (s, e) =>
+                {
+                    if (canGoUp && e.Which == 0)
+                    {
+                        var parent = Path.GetDirectoryName(currentPath.TrimEnd('/')) ?? STORAGE_ROOT;
+                        ShowFolderPickerDialog(parent, onFolderSelected, onCancelled);
+                    }
+                    else
+                    {
+                        var index = canGoUp ? e.Which - 1 : e.Which;
+                        ShowFolderPickerDialog(subFolders[index], onFolderSelected, onCancelled);
+                    }
+                });
+
+                builder.SetPositiveButton("Use this folder", (s, e) => onFolderSelected(currentPath));
+                builder.SetNeutralButton("New folder", (s, e) => ShowNewFolderDialog(currentPath, onFolderSelected, onCancelled));
+                builder.SetNegativeButton("Cancel", (s, e) => onCancelled());
+                builder.SetCancelable(false);
+                builder.Show();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error showing folder picker: {ex.Message}");
+                onCancelled();
+            }
+        }
+
+        private void ShowNewFolderDialog(string parentPath, Action<string> onFolderSelected, Action onCancelled)
+        {
+            var input = new EditText(this) { Hint = "Folder name" };
+            var builder = new AlertDialog.Builder(this);
+            builder.SetTitle("Create new folder");
+            builder.SetView(input);
+            builder.SetPositiveButton("Create", (s, e) =>
+            {
+                var name = input.Text?.Trim();
+                if (string.IsNullOrEmpty(name))
+                {
+                    ShowFolderPickerDialog(parentPath, onFolderSelected, onCancelled);
+                    return;
+                }
+
+                try
+                {
+                    var newPath = Path.Combine(parentPath, name);
+                    Directory.CreateDirectory(newPath);
+                    ShowFolderPickerDialog(newPath, onFolderSelected, onCancelled);
+                }
+                catch (Exception ex)
+                {
+                    Toast.MakeText(this, $"Failed to create folder: {ex.Message}", ToastLength.Long)?.Show();
+                    ShowFolderPickerDialog(parentPath, onFolderSelected, onCancelled);
+                }
+            });
+            builder.SetNegativeButton("Back", (s, e) => ShowFolderPickerDialog(parentPath, onFolderSelected, onCancelled));
+            builder.SetCancelable(false);
+            builder.Show();
+        }
+
+        private async Task HandleFolderPathSelection(string folderPath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_pendingScreenshotPath) || !File.Exists(_pendingScreenshotPath))
+                {
+                    Toast.MakeText(this, "Screenshot no longer exists", ToastLength.Short)?.Show();
+                    ClearPendingScreenshot();
+
+                    if (_wasLaunchedForFolderSelection)
+                    {
+                        Finish();
+                    }
+                    return;
+                }
+
+                await MoveFileToFolder(_pendingScreenshotPath, folderPath);
+                ClearPendingScreenshot();
+            }
+            catch (Exception ex)
+            {
+                Toast.MakeText(this, $"Error: {ex.Message}", ToastLength.Long)?.Show();
+                ClearPendingScreenshot();
+
+                if (_wasLaunchedForFolderSelection)
+                {
+                    Finish();
+                }
             }
         }
 
@@ -130,121 +274,6 @@ namespace Screenshot_Organiser
             }
         }
 
-        protected override void OnActivityResult(int requestCode, Result resultCode, Intent data)
-        {
-            base.OnActivityResult(requestCode, resultCode, data);
-
-            try
-            {
-                if (requestCode == DEFAULT_FOLDER_PICKER_REQUEST)
-                {
-                    _isSettingDefaultFolder = false;
-
-                    if (resultCode == Result.Ok && data?.Data != null)
-                    {
-                        HandleDefaultFolderSelection(data.Data);
-                    }
-
-                    // Always notify MainPage that folder setup is complete
-                    NotifyMainPageFolderSet();
-
-                    // For default folder setup during initial app setup, NEVER close the activity
-                    // Only close if this is a standalone folder picker launched from overlay
-                    System.Diagnostics.Debug.WriteLine("Default folder setup completed, staying in app");
-                }
-                else if (requestCode == FOLDER_PICKER_REQUEST)
-                {
-                    _isWaitingForFolderPicker = false;
-
-                    if (resultCode == Result.Ok && data?.Data != null)
-                    {
-                        HandleFolderSelection(data.Data);
-                    }
-                    else
-                    {
-                        Toast.MakeText(this, "Folder selection cancelled", ToastLength.Short)?.Show();
-                        ClearPendingScreenshot();
-
-                        // Only finish for screenshot folder selection (not default folder setup)
-                        if (_wasLaunchedForFolderSelection)
-                        {
-                            Finish();
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _isWaitingForFolderPicker = false;
-                _isSettingDefaultFolder = false;
-                Toast.MakeText(this, $"Error: {ex.Message}", ToastLength.Long)?.Show();
-
-                if (requestCode == DEFAULT_FOLDER_PICKER_REQUEST)
-                {
-                    NotifyMainPageFolderSet();
-                    // Never finish for default folder setup errors
-                    System.Diagnostics.Debug.WriteLine("Default folder setup error, staying in app");
-                }
-                else
-                {
-                    if (_wasLaunchedForFolderSelection)
-                    {
-                        Finish();
-                    }
-                }
-            }
-        }
-
-        private void HandleDefaultFolderSelection(Android.Net.Uri folderUri)
-        {
-            try
-            {
-                var folderPath = GetRealPathFromUri(folderUri);
-                if (!string.IsNullOrEmpty(folderPath))
-                {
-                    SetDefaultScreenshotFolder(folderPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                Toast.MakeText(this, $"Error setting default folder: {ex.Message}", ToastLength.Long)?.Show();
-            }
-        }
-
-        private async void HandleFolderSelection(Android.Net.Uri folderUri)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(_pendingScreenshotPath) || !File.Exists(_pendingScreenshotPath))
-                {
-                    Toast.MakeText(this, "Screenshot no longer exists", ToastLength.Short)?.Show();
-                    ClearPendingScreenshot();
-
-                    if (_wasLaunchedForFolderSelection)
-                    {
-                        Finish();
-                    }
-                    return;
-                }
-
-                // Move screenshot to selected folder
-                await MoveScreenshotToSelectedFolder(_pendingScreenshotPath, folderUri);
-
-                // Clear pending screenshot
-                ClearPendingScreenshot();
-            }
-            catch (Exception ex)
-            {
-                Toast.MakeText(this, $"Error: {ex.Message}", ToastLength.Long)?.Show();
-                ClearPendingScreenshot();
-
-                if (_wasLaunchedForFolderSelection)
-                {
-                    Finish();
-                }
-            }
-        }
-
         private void ClearPendingScreenshot()
         {
             try
@@ -256,32 +285,6 @@ namespace Screenshot_Organiser
             catch (Exception ex)
             {
                 Toast.MakeText(this, $"Error: {ex.Message}", ToastLength.Long)?.Show();
-            }
-        }
-
-        private async Task MoveScreenshotToSelectedFolder(string screenshotPath, Android.Net.Uri folderUri)
-        {
-            var folderPath = GetRealPathFromUri(folderUri);
-            if (!string.IsNullOrEmpty(folderPath))
-            {
-                await MoveFileToFolder(screenshotPath, folderPath);
-            }
-            else
-            {
-                Toast.MakeText(this, "Unable to access selected folder", ToastLength.Long)?.Show();
-            }
-        }
-
-        private string GetRealPathFromUri(Android.Net.Uri uri)
-        {
-            try
-            {
-                var path = uri.Path?.Replace("/tree/primary:", "/storage/emulated/0/");
-                return path;
-            }
-            catch (Exception ex)
-            {
-                return null;
             }
         }
 
