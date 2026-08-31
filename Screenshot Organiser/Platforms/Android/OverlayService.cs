@@ -133,7 +133,12 @@ namespace Screenshot_Organiser.Platforms.Android
                         };
 
                         int screenWidth = Resources?.DisplayMetrics?.WidthPixels ?? 1080;
-                        int targetWidth = (int)(screenWidth * 0.9);
+                        var density = Resources?.DisplayMetrics?.Density ?? 1f;
+                        var screenWidthDp = screenWidth / density;
+
+                        int targetWidth = screenWidthDp >= 600
+                            ? (int)(screenWidth * 0.45f)
+                            : (int)(screenWidth * 0.8f);
 
                         var layoutParams = new WindowManagerLayoutParams(
                             targetWidth,
