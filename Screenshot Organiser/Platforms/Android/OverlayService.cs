@@ -169,7 +169,7 @@ namespace Screenshot_Organiser.Platforms.Android
             }
         }
 
-        private const string STORAGE_ROOT = "/storage/emulated/0";
+        private const string STORAGE_ROOT = FolderPickerViewFactory.StorageRoot;
 
         private void ShowFolderPickerOverlay(string screenshotPath, string currentPath)
         {
@@ -181,143 +181,24 @@ namespace Screenshot_Organiser.Platforms.Android
                 {
                     HidePicker();
 
-                    var density = Resources?.DisplayMetrics?.Density ?? 1f;
-                    int Dp(int dp) => (int)(dp * density);
-
-                    // Root card
-                    var card = new LinearLayout(this)
-                    {
-                        Orientation = Orientation.Vertical
-                    };
-                    var cardBg = new global::Android.Graphics.Drawables.GradientDrawable();
-                    cardBg.SetColor(Color.ParseColor("#FFFFFF"));
-                    cardBg.SetCornerRadius(Dp(20));
-                    card.Background = cardBg;
-                    card.SetPadding(Dp(20), Dp(20), Dp(20), Dp(12));
-                    card.Elevation = Dp(8);
-
-                    // Title
-                    var title = new TextView(this)
-                    {
-                        Text = "📂 Move screenshot to…"
-                    };
-                    title.SetTextColor(Color.ParseColor("#1A1A1A"));
-                    title.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 18);
-                    title.SetTypeface(Typeface.DefaultBold, TypefaceStyle.Bold);
-                    card.AddView(title);
-
-                    // Current path subtitle
-                    var pathLabel = new TextView(this)
-                    {
-                        Text = currentPath.Replace(STORAGE_ROOT, "Internal storage")
-                    };
-                    pathLabel.SetTextColor(Color.ParseColor("#757575"));
-                    pathLabel.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 13);
-                    pathLabel.SetPadding(0, Dp(4), 0, Dp(10));
-                    pathLabel.SetSingleLine(true);
-                    pathLabel.Ellipsize = global::Android.Text.TextUtils.TruncateAt.Start;
-                    card.AddView(pathLabel);
-
-                    // Folder list
-                    string[] subFolders;
-                    try
-                    {
-                        subFolders = Directory.GetDirectories(currentPath)
-                            .Where(d => !IOPath.GetFileName(d).StartsWith("."))
-                            .OrderBy(d => IOPath.GetFileName(d), StringComparer.OrdinalIgnoreCase)
-                            .ToArray();
-                    }
-                    catch
-                    {
-                        subFolders = Array.Empty<string>();
-                    }
-
-                    bool canGoUp = !string.Equals(currentPath.TrimEnd('/'), STORAGE_ROOT, StringComparison.OrdinalIgnoreCase);
-
-                    var items = new List<string>();
-                    if (canGoUp) items.Add("⬆️  ..");
-                    items.AddRange(subFolders.Select(d => "📁  " + IOPath.GetFileName(d)));
-
-                    var listView = new ListView(this)
-                    {
-                        Adapter = new ArrayAdapter<string>(this, global::Android.Resource.Layout.SimpleListItem1, items),
-                        Divider = null
-                    };
-                    listView.ItemClick += (s, e) =>
-                    {
-                        try
+                    var card = FolderPickerViewFactory.BuildFolderPickerCard(
+                        this,
+                        title: "📂 Move screenshot to…",
+                        confirmText: "Move here",
+                        currentPath: currentPath,
+                        onNavigate: path => ShowFolderPickerOverlay(screenshotPath, path),
+                        onConfirm: async path =>
                         {
-                            if (canGoUp && e.Position == 0)
-                            {
-                                var parent = IOPath.GetDirectoryName(currentPath.TrimEnd('/')) ?? STORAGE_ROOT;
-                                ShowFolderPickerOverlay(screenshotPath, parent);
-                            }
-                            else
-                            {
-                                var index = canGoUp ? e.Position - 1 : e.Position;
-                                ShowFolderPickerOverlay(screenshotPath, subFolders[index]);
-                            }
-                        }
-                        catch (Exception ex)
+                            HidePicker();
+                            await MoveToFolder(screenshotPath, path);
+                        },
+                        onNewFolder: path => ShowNewFolderOverlay(screenshotPath, path),
+                        onCancel: () =>
                         {
-                            System.Diagnostics.Debug.WriteLine($"Error navigating folder: {ex.Message}");
-                        }
-                    };
-
-                    int screenHeight = Resources?.DisplayMetrics?.HeightPixels ?? 1920;
-                    var listParams = new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MatchParent, (int)(screenHeight * 0.35f));
-                    card.AddView(listView, listParams);
-
-                    // Buttons row
-                    var buttonRow = new LinearLayout(this)
-                    {
-                        Orientation = Orientation.Horizontal
-                    };
-                    buttonRow.SetPadding(0, Dp(10), 0, 0);
-
-                    AndroidButton MakeFlatButton(string text, Color textColor)
-                    {
-                        var btn = new AndroidButton(this) { Text = text };
-                        btn.SetTextColor(textColor);
-                        btn.SetBackgroundColor(Color.Transparent);
-                        btn.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 14);
-                        btn.SetAllCaps(false);
-                        return btn;
-                    }
-
-                    var cancelBtn = MakeFlatButton("Cancel", Color.ParseColor("#757575"));
-                    var newFolderBtn = MakeFlatButton("New folder", Color.ParseColor("#1976D2"));
-                    var moveHereBtn = new AndroidButton(this) { Text = "Move here" };
-                    moveHereBtn.SetTextColor(Color.White);
-                    moveHereBtn.SetAllCaps(false);
-                    moveHereBtn.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 14);
-                    var moveBg = new global::Android.Graphics.Drawables.GradientDrawable();
-                    moveBg.SetColor(Color.ParseColor("#1976D2"));
-                    moveBg.SetCornerRadius(Dp(20));
-                    moveHereBtn.Background = moveBg;
-                    moveHereBtn.SetPadding(Dp(16), 0, Dp(16), 0);
-
-                    cancelBtn.Click += (s, e) =>
-                    {
-                        HidePicker();
-                        MarkFileAsProcessed(screenshotPath);
-                        ShowToast("Screenshot kept in original location");
-                    };
-
-                    newFolderBtn.Click += (s, e) => ShowNewFolderOverlay(screenshotPath, currentPath);
-
-                    moveHereBtn.Click += async (s, e) =>
-                    {
-                        HidePicker();
-                        await MoveToFolder(screenshotPath, currentPath);
-                    };
-
-                    var btnParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f);
-                    buttonRow.AddView(cancelBtn, btnParams);
-                    buttonRow.AddView(newFolderBtn, btnParams);
-                    buttonRow.AddView(moveHereBtn, btnParams);
-                    card.AddView(buttonRow);
+                            HidePicker();
+                            MarkFileAsProcessed(screenshotPath);
+                            ShowToast("Screenshot kept in original location");
+                        });
 
                     AddPickerToWindow(card, focusable: false);
                 }
@@ -336,69 +217,12 @@ namespace Screenshot_Organiser.Platforms.Android
                 {
                     HidePicker();
 
-                    var density = Resources?.DisplayMetrics?.Density ?? 1f;
-                    int Dp(int dp) => (int)(dp * density);
-
-                    var card = new LinearLayout(this) { Orientation = Orientation.Vertical };
-                    var cardBg = new global::Android.Graphics.Drawables.GradientDrawable();
-                    cardBg.SetColor(Color.ParseColor("#FFFFFF"));
-                    cardBg.SetCornerRadius(Dp(20));
-                    card.Background = cardBg;
-                    card.SetPadding(Dp(20), Dp(20), Dp(20), Dp(12));
-
-                    var title = new TextView(this) { Text = "📁 Create new folder" };
-                    title.SetTextColor(Color.ParseColor("#1A1A1A"));
-                    title.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 18);
-                    title.SetTypeface(Typeface.DefaultBold, TypefaceStyle.Bold);
-                    card.AddView(title);
-
-                    var input = new EditText(this) { Hint = "Folder name" };
-                    input.SetTextColor(Color.ParseColor("#1A1A1A"));
-                    card.AddView(input);
-
-                    var buttonRow = new LinearLayout(this) { Orientation = Orientation.Horizontal };
-                    buttonRow.SetPadding(0, Dp(10), 0, 0);
-
-                    var backBtn = new AndroidButton(this) { Text = "Back" };
-                    backBtn.SetTextColor(Color.ParseColor("#757575"));
-                    backBtn.SetBackgroundColor(Color.Transparent);
-                    backBtn.SetAllCaps(false);
-
-                    var createBtn = new AndroidButton(this) { Text = "Create" };
-                    createBtn.SetTextColor(Color.White);
-                    createBtn.SetAllCaps(false);
-                    var createBg = new global::Android.Graphics.Drawables.GradientDrawable();
-                    createBg.SetColor(Color.ParseColor("#1976D2"));
-                    createBg.SetCornerRadius(Dp(20));
-                    createBtn.Background = createBg;
-
-                    backBtn.Click += (s, e) => ShowFolderPickerOverlay(screenshotPath, parentPath);
-
-                    createBtn.Click += (s, e) =>
-                    {
-                        var name = input.Text?.Trim();
-                        if (string.IsNullOrEmpty(name))
-                        {
-                            ShowToast("Enter a folder name");
-                            return;
-                        }
-
-                        try
-                        {
-                            var newPath = IOPath.Combine(parentPath, name);
-                            Directory.CreateDirectory(newPath);
-                            ShowFolderPickerOverlay(screenshotPath, newPath);
-                        }
-                        catch (Exception ex)
-                        {
-                            ShowToast($"Failed to create folder: {ex.Message}");
-                        }
-                    };
-
-                    var btnParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f);
-                    buttonRow.AddView(backBtn, btnParams);
-                    buttonRow.AddView(createBtn, btnParams);
-                    card.AddView(buttonRow);
+                    var card = FolderPickerViewFactory.BuildNewFolderCard(
+                        this,
+                        parentPath,
+                        onCreated: newPath => ShowFolderPickerOverlay(screenshotPath, newPath),
+                        onBack: () => ShowFolderPickerOverlay(screenshotPath, parentPath),
+                        showMessage: ShowToast);
 
                     // Needs to be focusable so the keyboard works for the EditText
                     AddPickerToWindow(card, focusable: true);
@@ -414,13 +238,7 @@ namespace Screenshot_Organiser.Platforms.Android
         {
             if (_windowManager == null) return;
 
-            int screenWidth = Resources?.DisplayMetrics?.WidthPixels ?? 1080;
-            var density = Resources?.DisplayMetrics?.Density ?? 1f;
-            var screenWidthDp = screenWidth / density;
-
-            int targetWidth = screenWidthDp >= 600
-                ? (int)(screenWidth * 0.5f)
-                : (int)(screenWidth * 0.88f);
+            int targetWidth = FolderPickerViewFactory.GetPreferredWidth(this);
 
             var flags = focusable
                 ? WindowManagerFlags.NotTouchModal
