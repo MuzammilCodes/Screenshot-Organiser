@@ -2,7 +2,9 @@
 using Android.Content;
 using Android.Content.PM;
 using Android.OS;
+using Android.Views;
 using Android.Widget;
+using Screenshot_Organiser.Platforms.Android;
 
 namespace Screenshot_Organiser
 {
@@ -70,13 +72,14 @@ namespace Screenshot_Organiser
             }
         }
 
-        private const string STORAGE_ROOT = "/storage/emulated/0";
+        private const string STORAGE_ROOT = FolderPickerViewFactory.StorageRoot;
+        private Dialog? _pickerDialog;
 
         private void StartDefaultFolderPicker()
         {
             try
             {
-                ShowFolderPickerDialog(STORAGE_ROOT,
+                ShowFolderPickerDialog("📂 Choose default folder", "Use this folder", STORAGE_ROOT,
                     onFolderSelected: folderPath =>
                     {
                         _isSettingDefaultFolder = false;
@@ -102,7 +105,7 @@ namespace Screenshot_Organiser
         {
             try
             {
-                ShowFolderPickerDialog(STORAGE_ROOT,
+                ShowFolderPickerDialog("📂 Move screenshot to…", "Move here", STORAGE_ROOT,
                     onFolderSelected: async folderPath =>
                     {
                         _isWaitingForFolderPicker = false;
@@ -128,51 +131,32 @@ namespace Screenshot_Organiser
             }
         }
 
-        private void ShowFolderPickerDialog(string currentPath, Action<string> onFolderSelected, Action onCancelled)
+        private void ShowFolderPickerDialog(string title, string confirmText, string currentPath,
+            Action<string> onFolderSelected, Action onCancelled)
         {
             try
             {
-                string[] subFolders;
-                try
-                {
-                    subFolders = Directory.GetDirectories(currentPath)
-                        .Where(d => !Path.GetFileName(d).StartsWith("."))
-                        .OrderBy(d => Path.GetFileName(d), StringComparer.OrdinalIgnoreCase)
-                        .ToArray();
-                }
-                catch
-                {
-                    subFolders = Array.Empty<string>();
-                }
+                HidePickerDialog();
 
-                bool canGoUp = !string.Equals(currentPath.TrimEnd('/'), STORAGE_ROOT, StringComparison.OrdinalIgnoreCase);
-
-                var items = new List<string>();
-                if (canGoUp) items.Add("⬆️ ..");
-                items.AddRange(subFolders.Select(d => "📁 " + Path.GetFileName(d)));
-
-                var builder = new AlertDialog.Builder(this);
-                builder.SetTitle(currentPath.Replace(STORAGE_ROOT, "Internal storage"));
-
-                builder.SetItems(items.ToArray(), (s, e) =>
-                {
-                    if (canGoUp && e.Which == 0)
+                var card = FolderPickerViewFactory.BuildFolderPickerCard(
+                    this,
+                    title: title,
+                    confirmText: confirmText,
+                    currentPath: currentPath,
+                    onNavigate: path => ShowFolderPickerDialog(title, confirmText, path, onFolderSelected, onCancelled),
+                    onConfirm: path =>
                     {
-                        var parent = Path.GetDirectoryName(currentPath.TrimEnd('/')) ?? STORAGE_ROOT;
-                        ShowFolderPickerDialog(parent, onFolderSelected, onCancelled);
-                    }
-                    else
+                        HidePickerDialog();
+                        onFolderSelected(path);
+                    },
+                    onNewFolder: path => ShowNewFolderDialog(title, confirmText, path, onFolderSelected, onCancelled),
+                    onCancel: () =>
                     {
-                        var index = canGoUp ? e.Which - 1 : e.Which;
-                        ShowFolderPickerDialog(subFolders[index], onFolderSelected, onCancelled);
-                    }
-                });
+                        HidePickerDialog();
+                        onCancelled();
+                    });
 
-                builder.SetPositiveButton("Use this folder", (s, e) => onFolderSelected(currentPath));
-                builder.SetNeutralButton("New folder", (s, e) => ShowNewFolderDialog(currentPath, onFolderSelected, onCancelled));
-                builder.SetNegativeButton("Cancel", (s, e) => onCancelled());
-                builder.SetCancelable(false);
-                builder.Show();
+                ShowCardInDialog(card);
             }
             catch (Exception ex)
             {
@@ -181,36 +165,58 @@ namespace Screenshot_Organiser
             }
         }
 
-        private void ShowNewFolderDialog(string parentPath, Action<string> onFolderSelected, Action onCancelled)
+        private void ShowNewFolderDialog(string title, string confirmText, string parentPath,
+            Action<string> onFolderSelected, Action onCancelled)
         {
-            var input = new EditText(this) { Hint = "Folder name" };
-            var builder = new AlertDialog.Builder(this);
-            builder.SetTitle("Create new folder");
-            builder.SetView(input);
-            builder.SetPositiveButton("Create", (s, e) =>
+            try
             {
-                var name = input.Text?.Trim();
-                if (string.IsNullOrEmpty(name))
-                {
-                    ShowFolderPickerDialog(parentPath, onFolderSelected, onCancelled);
-                    return;
-                }
+                HidePickerDialog();
 
-                try
-                {
-                    var newPath = Path.Combine(parentPath, name);
-                    Directory.CreateDirectory(newPath);
-                    ShowFolderPickerDialog(newPath, onFolderSelected, onCancelled);
-                }
-                catch (Exception ex)
-                {
-                    Toast.MakeText(this, $"Failed to create folder: {ex.Message}", ToastLength.Long)?.Show();
-                    ShowFolderPickerDialog(parentPath, onFolderSelected, onCancelled);
-                }
-            });
-            builder.SetNegativeButton("Back", (s, e) => ShowFolderPickerDialog(parentPath, onFolderSelected, onCancelled));
-            builder.SetCancelable(false);
-            builder.Show();
+                var card = FolderPickerViewFactory.BuildNewFolderCard(
+                    this,
+                    parentPath,
+                    onCreated: newPath => ShowFolderPickerDialog(title, confirmText, newPath, onFolderSelected, onCancelled),
+                    onBack: () => ShowFolderPickerDialog(title, confirmText, parentPath, onFolderSelected, onCancelled),
+                    showMessage: msg => Toast.MakeText(this, msg, ToastLength.Long)?.Show());
+
+                ShowCardInDialog(card);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error showing new folder dialog: {ex.Message}");
+                onCancelled();
+            }
+        }
+
+        private void ShowCardInDialog(Android.Views.View card)
+        {
+            var dialog = new Dialog(this);
+            dialog.RequestWindowFeature((int)WindowFeatures.NoTitle);
+            dialog.SetContentView(card);
+            dialog.SetCancelable(false);
+
+            var window = dialog.Window;
+            window?.SetBackgroundDrawable(new global::Android.Graphics.Drawables.ColorDrawable(global::Android.Graphics.Color.Transparent));
+            window?.SetLayout(FolderPickerViewFactory.GetPreferredWidth(this), ViewGroup.LayoutParams.WrapContent);
+
+            _pickerDialog = dialog;
+            dialog.Show();
+        }
+
+        private void HidePickerDialog()
+        {
+            try
+            {
+                _pickerDialog?.Dismiss();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error dismissing picker dialog: {ex.Message}");
+            }
+            finally
+            {
+                _pickerDialog = null;
+            }
         }
 
         private async Task HandleFolderPathSelection(string folderPath)
