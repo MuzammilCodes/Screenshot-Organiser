@@ -197,6 +197,72 @@ namespace Screenshot_Organiser.Platforms.Android
         }
 
         /// <summary>
+        /// Builds a simple confirmation card (title, message, cancel + confirm buttons)
+        /// styled identically to the folder picker cards.
+        /// </summary>
+        public static AndroidView BuildConfirmationCard(
+            Context context,
+            string title,
+            string message,
+            string confirmText,
+            Action onConfirm,
+            Action onCancel)
+        {
+            var density = context.Resources?.DisplayMetrics?.Density ?? 1f;
+            int Dp(int dp) => (int)(dp * density);
+
+            var card = CreateCard(context, Dp);
+
+            card.AddView(CreateTitle(context, title));
+
+            var messageLabel = new TextView(context) { Text = message };
+            messageLabel.SetTextColor(Color.ParseColor(SecondaryColor));
+            messageLabel.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 14);
+            messageLabel.SetPadding(0, Dp(6), 0, Dp(6));
+            card.AddView(messageLabel);
+
+            var buttonRow = CreateButtonRow(context, Dp);
+
+            var cancelBtn = CreateFlatButton(context, "Cancel", Color.ParseColor(SecondaryColor));
+            var confirmBtn = CreatePillButton(context, confirmText, Dp);
+
+            cancelBtn.Click += (s, e) => onCancel();
+            confirmBtn.Click += (s, e) => onConfirm();
+
+            var btnParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f);
+            buttonRow.AddView(cancelBtn, btnParams);
+            buttonRow.AddView(confirmBtn, btnParams);
+            card.AddView(buttonRow);
+
+            return card;
+        }
+
+        /// <summary>
+        /// Builds a small bottom snackbar-style card, e.g. "Moved to Pictures ✅".
+        /// </summary>
+        public static AndroidView BuildSnackbarCard(Context context, string message)
+        {
+            var density = context.Resources?.DisplayMetrics?.Density ?? 1f;
+            int Dp(int dp) => (int)(dp * density);
+
+            var bar = new LinearLayout(context) { Orientation = Orientation.Horizontal };
+            var bg = new global::Android.Graphics.Drawables.GradientDrawable();
+            bg.SetColor(Color.ParseColor("#323232"));
+            bg.SetCornerRadius(Dp(24));
+            bar.Background = bg;
+            bar.SetPadding(Dp(20), Dp(12), Dp(20), Dp(12));
+            bar.Elevation = Dp(6);
+            bar.SetGravity(GravityFlags.CenterVertical);
+
+            var label = new TextView(context) { Text = message };
+            label.SetTextColor(Color.White);
+            label.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 14);
+            bar.AddView(label);
+
+            return bar;
+        }
+
+        /// <summary>
         /// Computes the preferred picker width for the current screen.
         /// </summary>
         public static int GetPreferredWidth(Context context)

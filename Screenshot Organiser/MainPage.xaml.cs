@@ -343,12 +343,10 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
 
         try
         {
-            bool choose = await DisplayAlert(
-                "Default Screenshot Folder",
+            bool choose = await ShowStyledConfirmationDialog(
+                "📂 Default Screenshot Folder",
                 "Select where screenshots are stored",
-                "Select Folder",
-                "Cancel");
-
+                "Select Folder");
 
             if (choose)
             {
@@ -365,6 +363,66 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
             prefs?.Edit()?.PutBoolean(FolderSetupInProgressKey, false)?.Apply();
             throw;
         }
+    }
+
+    private Task<bool> ShowStyledConfirmationDialog(string title, string message, string confirmText)
+    {
+        var tcs = new TaskCompletionSource<bool>();
+
+#if ANDROID
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            try
+            {
+                var activity = Platform.CurrentActivity;
+                if (activity == null)
+                {
+                    tcs.TrySetResult(false);
+                    return;
+                }
+
+                Android.App.Dialog? dialog = null;
+
+                var card = Screenshot_Organiser.Platforms.Android.FolderPickerViewFactory.BuildConfirmationCard(
+                    activity,
+                    title,
+                    message,
+                    confirmText,
+                    onConfirm: () =>
+                    {
+                        dialog?.Dismiss();
+                        tcs.TrySetResult(true);
+                    },
+                    onCancel: () =>
+                    {
+                        dialog?.Dismiss();
+                        tcs.TrySetResult(false);
+                    });
+
+                dialog = new Android.App.Dialog(activity);
+                dialog.RequestWindowFeature((int)Android.Views.WindowFeatures.NoTitle);
+                dialog.SetContentView(card);
+                dialog.SetCancelable(false);
+
+                var window = dialog.Window;
+                window?.SetBackgroundDrawable(new Android.Graphics.Drawables.ColorDrawable(Android.Graphics.Color.Transparent));
+                window?.SetLayout(
+                    Screenshot_Organiser.Platforms.Android.FolderPickerViewFactory.GetPreferredWidth(activity),
+                    Android.Views.ViewGroup.LayoutParams.WrapContent);
+
+                dialog.Show();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error showing styled confirmation: {ex.Message}");
+                tcs.TrySetResult(false);
+            }
+        });
+#else
+        tcs.TrySetResult(false);
+#endif
+
+        return tcs.Task;
     }
 
 
