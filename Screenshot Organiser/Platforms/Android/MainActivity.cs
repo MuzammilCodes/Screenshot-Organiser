@@ -79,7 +79,7 @@ namespace Screenshot_Organiser
         {
             try
             {
-                ShowFolderPickerDialog("📂 Choose default folder", "Use this folder", STORAGE_ROOT,
+                ShowFolderPickerDialog("📂 Choose default folder", "Select", STORAGE_ROOT,
                     onFolderSelected: folderPath =>
                     {
                         _isSettingDefaultFolder = false;
@@ -136,8 +136,6 @@ namespace Screenshot_Organiser
         {
             try
             {
-                HidePickerDialog();
-
                 var card = FolderPickerViewFactory.BuildFolderPickerCard(
                     this,
                     title: title,
@@ -170,8 +168,6 @@ namespace Screenshot_Organiser
         {
             try
             {
-                HidePickerDialog();
-
                 var card = FolderPickerViewFactory.BuildNewFolderCard(
                     this,
                     parentPath,
@@ -190,6 +186,15 @@ namespace Screenshot_Organiser
 
         private void ShowCardInDialog(Android.Views.View card)
         {
+            // Reuse the existing dialog when navigating between folders to
+            // avoid the dismiss/show flicker - just swap the content view.
+            if (_pickerDialog != null && _pickerDialog.IsShowing)
+            {
+                _pickerDialog.SetContentView(card);
+                _pickerDialog.Window?.SetLayout(FolderPickerViewFactory.GetPreferredWidth(this), ViewGroup.LayoutParams.WrapContent);
+                return;
+            }
+
             var dialog = new Dialog(this);
             dialog.RequestWindowFeature((int)WindowFeatures.NoTitle);
             dialog.SetContentView(card);
@@ -318,7 +323,7 @@ namespace Screenshot_Organiser
                 File.Copy(sourcePath, destinationPath, overwrite: true);
                 File.Delete(sourcePath);
 
-                Toast.MakeText(this, $"✅ Screenshot moved to {Path.GetFileName(destinationFolder)}",
+                Toast.MakeText(this, $"Moved to {Path.GetFileName(destinationFolder)} ✅",
                     ToastLength.Long)?.Show();
 
                 if (_wasLaunchedForFolderSelection)

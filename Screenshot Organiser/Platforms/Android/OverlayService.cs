@@ -280,6 +280,50 @@ namespace Screenshot_Organiser.Platforms.Android
             }
         }
 
+        private void ShowBottomSnackbar(string message, int durationMs = 2500)
+        {
+            if (_windowManager == null) return;
+
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                AndroidView? bar = null;
+                try
+                {
+                    bar = FolderPickerViewFactory.BuildSnackbarCard(this, message);
+
+                    var density = Resources?.DisplayMetrics?.Density ?? 1f;
+                    var layoutParams = new WindowManagerLayoutParams(
+                        WindowManagerLayoutParams.WrapContent,
+                        WindowManagerLayoutParams.WrapContent,
+                        Build.VERSION.SdkInt >= BuildVersionCodes.O
+                            ? WindowManagerTypes.ApplicationOverlay
+                            : WindowManagerTypes.Phone,
+                        WindowManagerFlags.NotFocusable | WindowManagerFlags.NotTouchable,
+                        Format.Translucent)
+                    {
+                        Gravity = GravityFlags.Bottom | GravityFlags.CenterHorizontal,
+                        Y = (int)(72 * density)
+                    };
+
+                    _windowManager.AddView(bar, layoutParams);
+
+                    await Task.Delay(durationMs);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error showing snackbar: {ex.Message}");
+                }
+                finally
+                {
+                    try
+                    {
+                        if (bar != null) _windowManager?.RemoveView(bar);
+                    }
+                    catch { /* view may already be gone */ }
+                }
+            });
+        }
+
         private async Task MoveToFolder(string screenshotPath, string destinationFolder)
         {
             try
@@ -312,7 +356,7 @@ namespace Screenshot_Organiser.Platforms.Android
                 File.Delete(screenshotPath);
 
                 var folderName = IOPath.GetFileName(destinationFolder);
-                ShowToast($"✅ Screenshot moved to {folderName}");
+                ShowBottomSnackbar($"Moved to {folderName} ✅");
 
                 System.Diagnostics.Debug.WriteLine($"✅ Screenshot moved: {screenshotPath} → {destinationPath}");
             }
