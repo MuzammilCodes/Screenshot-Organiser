@@ -20,8 +20,31 @@ namespace Screenshot_Organiser.Platforms.Android
         public const string StorageRoot = "/storage/emulated/0";
 
         private const string AccentColor = "#1976D2";
-        private const string TitleColor = "#1A1A1A";
-        private const string SecondaryColor = "#757575";
+
+        // Light palette - soft off-white, easy on the eyes
+        private const string LightCardColor = "#FAFAFA";
+        private const string LightTitleColor = "#1A1A1A";
+        private const string LightSecondaryColor = "#757575";
+
+        // Dark palette
+        private const string DarkCardColor = "#313638";
+        private const string DarkTitleColor = "#F5F5F5";
+        private const string DarkSecondaryColor = "#B0B0B0";
+
+        private static bool IsDarkMode(Context context)
+        {
+            var uiMode = context.Resources?.Configuration?.UiMode & global::Android.Content.Res.UiMode.NightMask;
+            return uiMode == global::Android.Content.Res.UiMode.NightYes;
+        }
+
+        private static Color CardColor(Context context) =>
+            Color.ParseColor(IsDarkMode(context) ? DarkCardColor : LightCardColor);
+
+        private static Color TitleColor(Context context) =>
+            Color.ParseColor(IsDarkMode(context) ? DarkTitleColor : LightTitleColor);
+
+        private static Color SecondaryColor(Context context) =>
+            Color.ParseColor(IsDarkMode(context) ? DarkSecondaryColor : LightSecondaryColor);
 
         /// <summary>
         /// Builds the folder browser card.
@@ -56,7 +79,7 @@ namespace Screenshot_Organiser.Platforms.Android
             {
                 Text = currentPath.Replace(StorageRoot, "Internal storage")
             };
-            pathLabel.SetTextColor(Color.ParseColor(SecondaryColor));
+            pathLabel.SetTextColor(SecondaryColor(context));
             pathLabel.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 13);
             pathLabel.SetPadding(0, Dp(4), 0, Dp(10));
             pathLabel.SetSingleLine(true);
@@ -85,7 +108,7 @@ namespace Screenshot_Organiser.Platforms.Android
 
             var listView = new ListView(context)
             {
-                Adapter = new ArrayAdapter<string>(context, global::Android.Resource.Layout.SimpleListItem1, items),
+                Adapter = new FolderListAdapter(context, items),
                 Divider = null
             };
             listView.ItemClick += (s, e) =>
@@ -117,7 +140,7 @@ namespace Screenshot_Organiser.Platforms.Android
             // Buttons row
             var buttonRow = CreateButtonRow(context, Dp);
 
-            var cancelBtn = CreateFlatButton(context, "Cancel", Color.ParseColor(SecondaryColor));
+            var cancelBtn = CreateFlatButton(context, "Cancel", SecondaryColor(context));
             var newFolderBtn = CreateFlatButton(context, "New folder", Color.ParseColor(AccentColor));
             var confirmBtn = CreatePillButton(context, confirmText, Dp);
 
@@ -157,12 +180,13 @@ namespace Screenshot_Organiser.Platforms.Android
             card.AddView(CreateTitle(context, "📁 Create new folder"));
 
             var input = new EditText(context) { Hint = "Folder name" };
-            input.SetTextColor(Color.ParseColor(TitleColor));
+            input.SetTextColor(TitleColor(context));
+            input.SetHintTextColor(SecondaryColor(context));
             card.AddView(input);
 
             var buttonRow = CreateButtonRow(context, Dp);
 
-            var backBtn = CreateFlatButton(context, "Back", Color.ParseColor(SecondaryColor));
+            var backBtn = CreateFlatButton(context, "Back", SecondaryColor(context));
             var createBtn = CreatePillButton(context, "Create", Dp);
 
             backBtn.Click += (s, e) => onBack();
@@ -216,14 +240,14 @@ namespace Screenshot_Organiser.Platforms.Android
             card.AddView(CreateTitle(context, title));
 
             var messageLabel = new TextView(context) { Text = message };
-            messageLabel.SetTextColor(Color.ParseColor(SecondaryColor));
+            messageLabel.SetTextColor(SecondaryColor(context));
             messageLabel.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 14);
             messageLabel.SetPadding(0, Dp(6), 0, Dp(6));
             card.AddView(messageLabel);
 
             var buttonRow = CreateButtonRow(context, Dp);
 
-            var cancelBtn = CreateFlatButton(context, "Cancel", Color.ParseColor(SecondaryColor));
+            var cancelBtn = CreateFlatButton(context, "Cancel", SecondaryColor(context));
             var confirmBtn = CreatePillButton(context, confirmText, Dp);
 
             cancelBtn.Click += (s, e) => onCancel();
@@ -263,6 +287,43 @@ namespace Screenshot_Organiser.Platforms.Android
         }
 
         /// <summary>
+        /// Builds the "Screenshot detected" card shown by the OverlayService.
+        /// </summary>
+        public static AndroidView BuildScreenshotDetectedCard(
+            Context context,
+            Action onSelectFolder,
+            Action onCancel)
+        {
+            var density = context.Resources?.DisplayMetrics?.Density ?? 1f;
+            int Dp(int dp) => (int)(dp * density);
+
+            var card = CreateCard(context, Dp);
+
+            card.AddView(CreateTitle(context, "📸 Screenshot detected!"));
+
+            var messageLabel = new TextView(context) { Text = "Where would you like to save it?" };
+            messageLabel.SetTextColor(SecondaryColor(context));
+            messageLabel.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 14);
+            messageLabel.SetPadding(0, Dp(6), 0, Dp(6));
+            card.AddView(messageLabel);
+
+            var buttonRow = CreateButtonRow(context, Dp);
+
+            var cancelBtn = CreateFlatButton(context, "Cancel", SecondaryColor(context));
+            var selectBtn = CreatePillButton(context, "📁 Select folder", Dp);
+
+            cancelBtn.Click += (s, e) => onCancel();
+            selectBtn.Click += (s, e) => onSelectFolder();
+
+            var btnParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f);
+            buttonRow.AddView(cancelBtn, btnParams);
+            buttonRow.AddView(selectBtn, btnParams);
+            card.AddView(buttonRow);
+
+            return card;
+        }
+
+        /// <summary>
         /// Computes the preferred picker width for the current screen.
         /// </summary>
         public static int GetPreferredWidth(Context context)
@@ -276,11 +337,35 @@ namespace Screenshot_Organiser.Platforms.Android
                 : (int)(screenWidth * 0.88f);
         }
 
+        /// <summary>
+        /// Adapter that forces the row text color so folder names stay visible
+        /// regardless of the host theme (e.g. dark mode makes SimpleListItem1
+        /// text white on our white card).
+        /// </summary>
+        private sealed class FolderListAdapter : ArrayAdapter<string>
+        {
+            public FolderListAdapter(Context context, IList<string> items)
+                : base(context, global::Android.Resource.Layout.SimpleListItem1, items)
+            {
+            }
+
+            public override AndroidView GetView(int position, AndroidView? convertView, ViewGroup parent)
+            {
+                var view = base.GetView(position, convertView, parent);
+                if (view is TextView textView)
+                {
+                    textView.SetTextColor(TitleColor(Context));
+                    textView.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 15);
+                }
+                return view;
+            }
+        }
+
         private static LinearLayout CreateCard(Context context, Func<int, int> dp)
         {
             var card = new LinearLayout(context) { Orientation = Orientation.Vertical };
             var cardBg = new global::Android.Graphics.Drawables.GradientDrawable();
-            cardBg.SetColor(Color.ParseColor("#FFFFFF"));
+            cardBg.SetColor(CardColor(context));
             cardBg.SetCornerRadius(dp(20));
             card.Background = cardBg;
             card.SetPadding(dp(20), dp(20), dp(20), dp(12));
@@ -291,7 +376,7 @@ namespace Screenshot_Organiser.Platforms.Android
         private static TextView CreateTitle(Context context, string text)
         {
             var title = new TextView(context) { Text = text };
-            title.SetTextColor(Color.ParseColor(TitleColor));
+            title.SetTextColor(TitleColor(context));
             title.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 18);
             title.SetTypeface(Typeface.DefaultBold, TypefaceStyle.Bold);
             return title;

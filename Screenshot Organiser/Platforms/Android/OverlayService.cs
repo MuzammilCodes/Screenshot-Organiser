@@ -99,49 +99,37 @@ namespace Screenshot_Organiser.Platforms.Android
 
                         HideDialog();
 
-                        _overlayView = LayoutInflater.From(this)?.Inflate(Screenshot_Organiser.Resource.Layout.overlay_screenshot_dialog, null);
-                        if (_overlayView == null) return;
-
-                        // Setup button click handlers
-                        var selectBtn = _overlayView.FindViewById<AndroidButton>(Screenshot_Organiser.Resource.Id.btnSelect);
-                        var cancelBtn = _overlayView.FindViewById<AndroidButton>(Screenshot_Organiser.Resource.Id.btnCancel);
-
-                        selectBtn!.Click += (s, e) =>
-                        {
-                            try
+                        _overlayView = FolderPickerViewFactory.BuildScreenshotDetectedCard(
+                            this,
+                            onSelectFolder: () =>
                             {
-                                System.Diagnostics.Debug.WriteLine("Select button clicked");
-                                HideDialog();
-                                ShowFolderPickerOverlay(screenshotPath, STORAGE_ROOT);
-                            }
-                            catch (Exception ex)
+                                try
+                                {
+                                    System.Diagnostics.Debug.WriteLine("Select button clicked");
+                                    HideDialog();
+                                    ShowFolderPickerOverlay(screenshotPath, STORAGE_ROOT);
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"Error in select button click: {ex.Message}");
+                                }
+                            },
+                            onCancel: () =>
                             {
-                                System.Diagnostics.Debug.WriteLine($"Error in select button click: {ex.Message}");
-                            }
-                        };
+                                try
+                                {
+                                    System.Diagnostics.Debug.WriteLine("Cancel button clicked");
+                                    HideDialog();
+                                    MarkFileAsProcessed(screenshotPath);
+                                    ShowToast("Screenshot kept in original location");
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"Error in cancel button click: {ex.Message}");
+                                }
+                            });
 
-                        cancelBtn!.Click += (s, e) =>
-                        {
-                            try
-                            {
-                                System.Diagnostics.Debug.WriteLine("Cancel button clicked");
-                                HideDialog();
-                                MarkFileAsProcessed(screenshotPath);
-                                ShowToast("Screenshot kept in original location");
-                            }
-                            catch (Exception ex)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Error in cancel button click: {ex.Message}");
-                            }
-                        };
-
-                        int screenWidth = Resources?.DisplayMetrics?.WidthPixels ?? 1080;
-                        var density = Resources?.DisplayMetrics?.Density ?? 1f;
-                        var screenWidthDp = screenWidth / density;
-
-                        int targetWidth = screenWidthDp >= 600
-                            ? (int)(screenWidth * 0.45f)
-                            : (int)(screenWidth * 0.8f);
+                        int targetWidth = FolderPickerViewFactory.GetPreferredWidth(this);
 
                         var layoutParams = new WindowManagerLayoutParams(
                             targetWidth,

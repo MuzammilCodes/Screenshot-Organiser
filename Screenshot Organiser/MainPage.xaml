@@ -1,36 +1,71 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage
-    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    x:Class="Screenshot_Organiser.MainPage"
-    BackgroundColor="#F8FAFC">
+xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+x:Class="Screenshot_Organiser.MainPage"
+BackgroundColor="{AppThemeBinding Light={StaticResource PageBackgroundLight}, Dark={StaticResource PageBackgroundDark}}">
 
-    <!-- ROOT LAYOUT -->
-    <Grid RowDefinitions="Auto,Auto,*">
+<ContentPage.Resources>
+    <ResourceDictionary>
+        <!-- Shared card style: themed background + native Frame shadow -->
+        <Style x:Key="CardFrame" TargetType="Frame">
+            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource CardBackgroundLight}, Dark={StaticResource CardBackgroundDark}}" />
+            <Setter Property="BorderColor" Value="Transparent" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="HasShadow" Value="True" />
+        </Style>
 
-        <!-- ================= HEADER ================= -->
-        <Grid
-            Grid.Row="0"
-            BackgroundColor="White"
-            Padding="16,18"
-            ColumnDefinitions="Auto,*">
+        <Style x:Key="CardTitle" TargetType="Label">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+        </Style>
 
-            <Label
-                Grid.Column="1"
-                Text="Screenshot Organizer"
-                FontSize="20"
-                FontAttributes="Bold"
-                TextColor="#0F172A"
-                VerticalOptions="Center"
-                HorizontalTextAlignment="Center"
-                Margin="12,0,0,0" />
-        </Grid>
+        <Style x:Key="CardSubtitle" TargetType="Label">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextSecondaryLight}, Dark={StaticResource TextSecondaryDark}}" />
+        </Style>
 
-        <!-- ================= DIVIDER ================= -->
-        <BoxView
-            Grid.Row="1"
-            HeightRequest="1"
-            BackgroundColor="#E2E8F0" />
+        <Style x:Key="CheckMark" TargetType="Label">
+            <Setter Property="Text" Value="✓" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontAttributes" Value="Bold" />
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource SuccessLight}, Dark={StaticResource SuccessDark}}" />
+            <Setter Property="VerticalOptions" Value="Center" />
+            <Setter Property="HorizontalOptions" Value="End" />
+            <Setter Property="Margin" Value="0,0,15,0" />
+        </Style>
+    </ResourceDictionary>
+</ContentPage.Resources>
+
+<!-- ROOT LAYOUT -->
+<Grid RowDefinitions="Auto,Auto,*">
+
+    <!-- ================= HEADER ================= -->
+    <Grid
+        Grid.Row="0"
+        BackgroundColor="{AppThemeBinding Light={StaticResource CardBackgroundLight}, Dark={StaticResource CardBackgroundDark}}"
+        Padding="16,18"
+        ColumnDefinitions="Auto,*">
+
+        <Label
+            Grid.Column="1"
+            Text="Screenshot Organizer"
+            FontSize="20"
+            FontAttributes="Bold"
+            TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}"
+            VerticalOptions="Center"
+            HorizontalTextAlignment="Center"
+            Margin="12,0,0,0" />
+    </Grid>
+
+    <!-- ================= DIVIDER ================= -->
+    <BoxView
+        Grid.Row="1"
+        HeightRequest="1"
+        BackgroundColor="{AppThemeBinding Light={StaticResource DividerLight}, Dark={StaticResource DividerDark}}" />
 
         <!-- ================= CONTENT ================= -->
         <ScrollView Grid.Row="2">
@@ -47,35 +82,33 @@
                         Text="Organize your screenshots automatically"
                         FontSize="18"
                         FontAttributes="Bold"
-                        TextColor="#0F172A"
+                        TextColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}"
                         HorizontalTextAlignment="Center" />
 
                     <Label
                         Text="Grant permissions once and let the app do the rest"
                         FontSize="14"
-                        TextColor="#64748B"
+                        TextColor="{AppThemeBinding Light={StaticResource TextSecondaryLight}, Dark={StaticResource TextSecondaryDark}}"
                         HorizontalTextAlignment="Center" />
                 </VerticalStackLayout>
 
                 <!-- Overlay Permission -->
-                <Frame BackgroundColor="White" CornerRadius="16" HasShadow="True" Padding="16">
+                <Frame Style="{StaticResource CardFrame}">
                     <Grid ColumnDefinitions="Auto,*,Auto">
-                        <Image Source="overlay_icon.svg" WidthRequest="32" HeightRequest="32" />
+                        <Image Source="overlay_icon.svg" WidthRequest="32" HeightRequest="32">
+                            <Image.Behaviors>
+                                <toolkit:IconTintColorBehavior TintColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                            </Image.Behaviors>
+                        </Image>
 
                         <VerticalStackLayout Grid.Column="1" Margin="12,0" Spacing="4">
-                            <Label Text="Overlay Permission" FontSize="16" FontAttributes="Bold" TextColor="#1E293B" />
-                            <Label Text="Show popup over screenshots" FontSize="13" TextColor="#64748B" />
+                            <Label Text="Overlay Permission" Style="{StaticResource CardTitle}" />
+                            <Label Text="Show popup over screenshots" Style="{StaticResource CardSubtitle}" />
                         </VerticalStackLayout>
 
                         <Label
                             Grid.Column="2"
-                            Text="✓"
-                            FontSize="20"
-                            FontAttributes="Bold"
-                            TextColor="#16A34A"
-                            VerticalOptions="Center"
-                            HorizontalOptions="End"
-                            Margin="0,0,15,0"
+                            Style="{StaticResource CheckMark}"
                             IsVisible="{Binding HasOverlayPermission}" />
                     </Grid>
                     <Frame.GestureRecognizers>
@@ -85,24 +118,22 @@
                 </Frame>
 
                 <!-- File Permission -->
-                <Frame BackgroundColor="White" CornerRadius="16" HasShadow="True" Padding="16">
+                <Frame Style="{StaticResource CardFrame}">
                     <Grid ColumnDefinitions="Auto,*,Auto">
-                        <Image Source="folder_icon.svg" WidthRequest="32" HeightRequest="32" />
+                        <Image Source="folder_icon.svg" WidthRequest="32" HeightRequest="32">
+                            <Image.Behaviors>
+                                <toolkit:IconTintColorBehavior TintColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                            </Image.Behaviors>
+                        </Image>
 
                         <VerticalStackLayout Grid.Column="1" Margin="12,0" Spacing="4">
-                            <Label Text="All Files Access" FontSize="16" FontAttributes="Bold" TextColor="#1E293B" />
-                            <Label Text="Required to move screenshots" FontSize="13" TextColor="#64748B" />
+                            <Label Text="All Files Access" Style="{StaticResource CardTitle}" />
+                            <Label Text="Required to move screenshots" Style="{StaticResource CardSubtitle}" />
                         </VerticalStackLayout>
 
                         <Label
                             Grid.Column="2"
-                            Text="✓"
-                            FontSize="20"
-                            FontAttributes="Bold"
-                            TextColor="#16A34A"
-                            VerticalOptions="Center"
-                            HorizontalOptions="End"
-                            Margin="0,0,15,0"
+                            Style="{StaticResource CheckMark}"
                             IsVisible="{Binding HasFilePermission}" />
                     </Grid>
                     <Frame.GestureRecognizers>
@@ -112,36 +143,31 @@
                 </Frame>
 
                 <!-- Default Screenshot Folder -->
-                <Frame BackgroundColor="White" CornerRadius="16" HasShadow="True" Padding="16">
+                <Frame Style="{StaticResource CardFrame}">
                     <Grid ColumnDefinitions="Auto,*,Auto">
 
                         <Image
             Source="folder_icon.svg"
             WidthRequest="32"
-            HeightRequest="32" />
+            HeightRequest="32">
+                            <Image.Behaviors>
+                                <toolkit:IconTintColorBehavior TintColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                            </Image.Behaviors>
+                        </Image>
 
                         <VerticalStackLayout Grid.Column="1" Margin="12,0" Spacing="4">
                             <Label
                 Text="Default Screenshot Folder"
-                FontSize="16"
-                FontAttributes="Bold"
-                TextColor="#1E293B" />
+                Style="{StaticResource CardTitle}" />
 
                             <Label
                 Text="Choose where screenshots are read from"
-                FontSize="13"
-                TextColor="#64748B" />
+                Style="{StaticResource CardSubtitle}" />
                         </VerticalStackLayout>
 
                         <Label
             Grid.Column="2"
-            Text="✓"
-            FontSize="20"
-            FontAttributes="Bold"
-            TextColor="#16A34A"
-            VerticalOptions="Center"
-            HorizontalOptions="End"
-            Margin="0,0,15,0"
+            Style="{StaticResource CheckMark}"
             IsVisible="{Binding HasDefaultFolder}" />
                     </Grid>
 
@@ -152,30 +178,30 @@
 
 
                 <!-- Monitor Toggle -->
-                <Frame BackgroundColor="White" CornerRadius="16" HasShadow="True" Padding="16">
+                <Frame Style="{StaticResource CardFrame}">
                     <Grid ColumnDefinitions="*,Auto">
                         <VerticalStackLayout Spacing="4">
-                            <Label Text="Monitor Screenshots" FontSize="16" FontAttributes="Bold" TextColor="#1E293B" />
-                            <Label Text="Automatically organize screenshots" FontSize="13" TextColor="#64748B" />
+                            <Label Text="Monitor Screenshots" Style="{StaticResource CardTitle}" />
+                            <Label Text="Automatically organize screenshots" Style="{StaticResource CardSubtitle}" />
                         </VerticalStackLayout>
 
                         <Switch
                             Grid.Column="1"
                             IsToggled="{Binding MonitorToggle}"
                             IsEnabled="{Binding CanToggleMonitoring}"
-                            OnColor="#2563EB"
-                            ThumbColor="#1E293B"
+                            OnColor="{AppThemeBinding Light={StaticResource AccentLight}, Dark={StaticResource AccentDark}}"
+                            ThumbColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}"
                             VerticalOptions="Center" />
                     </Grid>
                 </Frame>
 
                 <!-- How it works -->
-                <Frame BackgroundColor="White" CornerRadius="16" Padding="16">
+                <Frame Style="{StaticResource CardFrame}">
                     <VerticalStackLayout Spacing="8">
-                        <Label Text="How it works" FontSize="16" FontAttributes="Bold" TextColor="#0F172A" />
+                        <Label Text="How it works" Style="{StaticResource CardTitle}" />
                         <Label
                             FontSize="14"
-                            TextColor="#475569"
+                            TextColor="{AppThemeBinding Light={StaticResource TextSecondaryLight}, Dark={StaticResource TextSecondaryDark}}"
                             Text="1. Grant permissions&#x0a;2. Select screenshot folder&#x0a;3. Enable monitoring&#x0a;4. Take screenshots&#x0a;5. Organize instantly" />
                     </VerticalStackLayout>
                 </Frame>
