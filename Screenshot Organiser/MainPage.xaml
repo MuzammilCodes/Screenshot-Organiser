@@ -97,7 +97,7 @@ BackgroundColor="{AppThemeBinding Light={StaticResource PageBackgroundLight}, Da
                     <Grid ColumnDefinitions="Auto,*,Auto">
                         <Image Source="overlay_icon.svg" WidthRequest="32" HeightRequest="32">
                             <Image.Behaviors>
-                                <toolkit:IconTintColorBehavior TintColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                                <toolkit:IconTintColorBehavior x:Name="OverlayIconTint" />
                             </Image.Behaviors>
                         </Image>
 
@@ -122,7 +122,7 @@ BackgroundColor="{AppThemeBinding Light={StaticResource PageBackgroundLight}, Da
                     <Grid ColumnDefinitions="Auto,*,Auto">
                         <Image Source="folder_icon.svg" WidthRequest="32" HeightRequest="32">
                             <Image.Behaviors>
-                                <toolkit:IconTintColorBehavior TintColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                                <toolkit:IconTintColorBehavior x:Name="FilesIconTint" />
                             </Image.Behaviors>
                         </Image>
 
@@ -151,7 +151,7 @@ BackgroundColor="{AppThemeBinding Light={StaticResource PageBackgroundLight}, Da
             WidthRequest="32"
             HeightRequest="32">
                             <Image.Behaviors>
-                                <toolkit:IconTintColorBehavior TintColor="{AppThemeBinding Light={StaticResource TextPrimaryLight}, Dark={StaticResource TextPrimaryDark}}" />
+                                <toolkit:IconTintColorBehavior x:Name="DefaultFolderIconTint" />
                             </Image.Behaviors>
                         </Image>
 

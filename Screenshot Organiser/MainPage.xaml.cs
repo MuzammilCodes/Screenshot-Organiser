@@ -29,6 +29,25 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
 
         _monitor = new ModernScreenshotMonitor();
         BindingContext = this;
+
+        ApplyIconTints();
+
+        if (Application.Current != null)
+            Application.Current.RequestedThemeChanged += (_, _) =>
+                MainThread.BeginInvokeOnMainThread(ApplyIconTints);
+    }
+
+    private void ApplyIconTints()
+    {
+        var isDark = (Application.Current?.RequestedTheme ?? AppTheme.Light) == AppTheme.Dark;
+        var key = isDark ? "TextPrimaryDark" : "TextPrimaryLight";
+
+        if (Application.Current?.Resources.TryGetValue(key, out var value) == true && value is Color tint)
+        {
+            OverlayIconTint.TintColor = tint;
+            FilesIconTint.TintColor = tint;
+            DefaultFolderIconTint.TintColor = tint;
+        }
     }
 
 
