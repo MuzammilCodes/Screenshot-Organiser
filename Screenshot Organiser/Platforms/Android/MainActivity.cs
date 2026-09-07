@@ -105,7 +105,7 @@ namespace Screenshot_Organiser
         {
             try
             {
-                ShowFolderPickerDialog("📂 Move screenshot to…", "Move here", STORAGE_ROOT,
+                ShowFolderPickerDialog("📂 Move screenshot to…", "Move", STORAGE_ROOT,
                     onFolderSelected: async folderPath =>
                     {
                         _isWaitingForFolderPicker = false;
