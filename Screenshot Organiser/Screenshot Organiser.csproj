@@ -10,24 +10,32 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
-    <!-- App Versioning -->
-    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
     <ApplicationVersion>1</ApplicationVersion>
 
-    <!-- Android API Levels -->
     <SupportedOSPlatformVersion>26.0</SupportedOSPlatformVersion>
-    <!-- Min SDK 26 -->
     <TargetPlatformVersion>34</TargetPlatformVersion>
-    <!-- Target Android 14 -->
   </PropertyGroup>
 
   <!-- Release-only settings -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <AndroidSupportedAbis>arm64-v8a</AndroidSupportedAbis>
     <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
-    <AndroidPackageFormat>apk</AndroidPackageFormat>
-    <DebugSymbols>false</DebugSymbols>
-    <DebugType>none</DebugType>
+    <AndroidPackageFormat>aab</AndroidPackageFormat>
+    <!-- Keep portable symbols for readable crash stacks in Play Console -->
+    <DebugType>portable</DebugType>
+
+    <!-- Release signing (secrets come from environment variables, never commit them)
+         Set before building:
+           ANDROID_KEYSTORE_PATH      - full path to your .keystore/.jks file
+           ANDROID_KEYSTORE_ALIAS     - key alias
+           ANDROID_KEYSTORE_PASSWORD  - keystore password
+           ANDROID_KEY_PASSWORD       - key password -->
+    <AndroidKeyStore Condition="'$(ANDROID_KEYSTORE_PATH)' != ''">true</AndroidKeyStore>
+    <AndroidSigningKeyStore>$(ANDROID_KEYSTORE_PATH)</AndroidSigningKeyStore>
+    <AndroidSigningKeyAlias>$(ANDROID_KEYSTORE_ALIAS)</AndroidSigningKeyAlias>
+    <AndroidSigningStorePass>$(ANDROID_KEYSTORE_PASSWORD)</AndroidSigningStorePass>
+    <AndroidSigningKeyPass>$(ANDROID_KEY_PASSWORD)</AndroidSigningKeyPass>
   </PropertyGroup>
 
   <!-- Debug-only settings -->
@@ -69,13 +77,6 @@
 
     <!-- Community Toolkit -->
     <PackageReference Include="CommunityToolkit.Maui" Version="7.0.1" />
-
-    <!-- Windows-specific -->
-    <PackageReference Include="Microsoft.Toolkit.Win32.UI.Controls" Version="6.1.3" Condition="'$(TargetFramework)' == 'net8.0-windows10.0.19041.0'" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Platforms\Android\Resources\NewFolder\" />
   </ItemGroup>
 
   <ItemGroup>
