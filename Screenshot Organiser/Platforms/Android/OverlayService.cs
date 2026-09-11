@@ -9,6 +9,8 @@ using Android.Widget;
 using AndroidX.Core.App;
 using AndroidButton = Android.Widget.Button;
 using AndroidView = Android.Views.View;
+using Color = Android.Graphics.Color;
+using ListView = Android.Widget.ListView;
 using IOPath = System.IO.Path;
 
 
@@ -19,6 +21,7 @@ namespace Screenshot_Organiser.Platforms.Android
     {
         private IWindowManager? _windowManager;
         private AndroidView? _overlayView;
+        private AndroidView? _pickerView;
         private static OverlayService? _instance;
         private const int NOTIFICATION_ID = 1001;
         private PowerManager.WakeLock? _wakeLock;
@@ -96,44 +99,37 @@ namespace Screenshot_Organiser.Platforms.Android
 
                         HideDialog();
 
-                        _overlayView = LayoutInflater.From(this)?.Inflate(Screenshot_Organiser.Resource.Layout.overlay_screenshot_dialog, null);
-                        if (_overlayView == null) return;
-
-                        // Setup button click handlers
-                        var selectBtn = _overlayView.FindViewById<AndroidButton>(Screenshot_Organiser.Resource.Id.btnSelect);
-                        var cancelBtn = _overlayView.FindViewById<AndroidButton>(Screenshot_Organiser.Resource.Id.btnCancel);
-
-                        selectBtn!.Click += async (s, e) =>
-                        {
-                            try
+                        _overlayView = FolderPickerViewFactory.BuildScreenshotDetectedCard(
+                            this,
+                            onSelectFolder: () =>
                             {
-                                System.Diagnostics.Debug.WriteLine("Select button clicked");
-                                HideDialog();
-                                await OpenSystemFilePicker(screenshotPath);
-                            }
-                            catch (Exception ex)
+                                try
+                                {
+                                    System.Diagnostics.Debug.WriteLine("Select button clicked");
+                                    HideDialog();
+                                    ShowFolderPickerOverlay(screenshotPath, STORAGE_ROOT);
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"Error in select button click: {ex.Message}");
+                                }
+                            },
+                            onCancel: () =>
                             {
-                                System.Diagnostics.Debug.WriteLine($"Error in select button click: {ex.Message}");
-                            }
-                        };
+                                try
+                                {
+                                    System.Diagnostics.Debug.WriteLine("Cancel button clicked");
+                                    HideDialog();
+                                    MarkFileAsProcessed(screenshotPath);
+                                    ShowToast("Screenshot kept in original location");
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"Error in cancel button click: {ex.Message}");
+                                }
+                            });
 
-                        cancelBtn!.Click += (s, e) =>
-                        {
-                            try
-                            {
-                                System.Diagnostics.Debug.WriteLine("Cancel button clicked");
-                                HideDialog();
-                                MarkFileAsProcessed(screenshotPath);
-                                ShowToast("Screenshot kept in original location");
-                            }
-                            catch (Exception ex)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Error in cancel button click: {ex.Message}");
-                            }
-                        };
-
-                        int screenWidth = Resources?.DisplayMetrics?.WidthPixels ?? 1080;
-                        int targetWidth = (int)(screenWidth * 0.9);
+                        int targetWidth = FolderPickerViewFactory.GetPreferredWidth(this);
 
                         var layoutParams = new WindowManagerLayoutParams(
                             targetWidth,
@@ -161,39 +157,159 @@ namespace Screenshot_Organiser.Platforms.Android
             }
         }
 
-        private async Task OpenSystemFilePicker(string screenshotPath)
+        private const string STORAGE_ROOT = FolderPickerViewFactory.StorageRoot;
+
+        private void ShowFolderPickerOverlay(string screenshotPath, string currentPath)
+        {
+            if (_windowManager == null || !_isServiceRunning) return;
+
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                try
+                {
+                    HidePicker();
+
+                    var card = FolderPickerViewFactory.BuildFolderPickerCard(
+                        this,
+                        title: "📂 Move screenshot to…",
+                        confirmText: "Move",
+                        currentPath: currentPath,
+                        onNavigate: path => ShowFolderPickerOverlay(screenshotPath, path),
+                        onConfirm: async path =>
+                        {
+                            HidePicker();
+                            await MoveToFolder(screenshotPath, path);
+                        },
+                        onNewFolder: path => ShowNewFolderOverlay(screenshotPath, path),
+                        onCancel: () =>
+                        {
+                            HidePicker();
+                            MarkFileAsProcessed(screenshotPath);
+                            ShowToast("Screenshot kept in original location");
+                        });
+
+                    AddPickerToWindow(card, focusable: false);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error showing folder picker overlay: {ex.Message}");
+                }
+            });
+        }
+
+        private void ShowNewFolderOverlay(string screenshotPath, string parentPath)
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                try
+                {
+                    HidePicker();
+
+                    var card = FolderPickerViewFactory.BuildNewFolderCard(
+                        this,
+                        parentPath,
+                        onCreated: newPath => ShowFolderPickerOverlay(screenshotPath, newPath),
+                        onBack: () => ShowFolderPickerOverlay(screenshotPath, parentPath),
+                        showMessage: ShowToast);
+
+                    // Needs to be focusable so the keyboard works for the EditText
+                    AddPickerToWindow(card, focusable: true);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error showing new folder overlay: {ex.Message}");
+                }
+            });
+        }
+
+        private void AddPickerToWindow(AndroidView view, bool focusable)
+        {
+            if (_windowManager == null) return;
+
+            int targetWidth = FolderPickerViewFactory.GetPreferredWidth(this);
+
+            var flags = focusable
+                ? WindowManagerFlags.NotTouchModal
+                : WindowManagerFlags.NotFocusable | WindowManagerFlags.NotTouchModal;
+
+            var layoutParams = new WindowManagerLayoutParams(
+                targetWidth,
+                WindowManagerLayoutParams.WrapContent,
+                Build.VERSION.SdkInt >= BuildVersionCodes.O
+                    ? WindowManagerTypes.ApplicationOverlay
+                    : WindowManagerTypes.Phone,
+                flags,
+                Format.Translucent)
+            {
+                Gravity = GravityFlags.Center,
+                SoftInputMode = SoftInput.AdjustPan
+            };
+
+            _pickerView = view;
+            _windowManager.AddView(_pickerView, layoutParams);
+        }
+
+        private void HidePicker()
         {
             try
             {
-                var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
-                var editor = prefs?.Edit();
-                editor?.PutString("pending_screenshot", screenshotPath);
-                editor?.Apply();
-
-                await Task.Delay(300);
-
-                var intent = new Intent(this, typeof(MainActivity));
-                // Changed: Remove ExcludeFromRecents flag to allow proper app flow
-                intent.AddFlags(ActivityFlags.NewTask | ActivityFlags.ClearTop);
-                intent.PutExtra("action", "pick_folder");
-                intent.PutExtra("timestamp", DateTimeOffset.Now.ToUnixTimeMilliseconds());
-
-                StartActivity(intent);
+                if (_pickerView != null && _windowManager != null)
+                {
+                    _windowManager.RemoveView(_pickerView);
+                }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error opening file picker: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error hiding picker: {ex.Message}");
+            }
+            finally
+            {
+                _pickerView = null;
+            }
+        }
+
+        private void ShowBottomSnackbar(string message, int durationMs = 2500)
+        {
+            if (_windowManager == null) return;
+
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                AndroidView? bar = null;
                 try
                 {
-                    await MoveToFolder(screenshotPath, "/storage/emulated/0/Download");
-                    ShowToast("📥 Moved to Downloads folder");
+                    bar = FolderPickerViewFactory.BuildSnackbarCard(this, message);
+
+                    var density = Resources?.DisplayMetrics?.Density ?? 1f;
+                    var layoutParams = new WindowManagerLayoutParams(
+                        WindowManagerLayoutParams.WrapContent,
+                        WindowManagerLayoutParams.WrapContent,
+                        Build.VERSION.SdkInt >= BuildVersionCodes.O
+                            ? WindowManagerTypes.ApplicationOverlay
+                            : WindowManagerTypes.Phone,
+                        WindowManagerFlags.NotFocusable | WindowManagerFlags.NotTouchable,
+                        Format.Translucent)
+                    {
+                        Gravity = GravityFlags.Bottom | GravityFlags.CenterHorizontal,
+                        Y = (int)(72 * density)
+                    };
+
+                    _windowManager.AddView(bar, layoutParams);
+
+                    await Task.Delay(durationMs);
                 }
-                catch (Exception fallbackEx)
+                catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Fallback move also failed: {fallbackEx.Message}");
-                    ShowToast("❌ Failed to move screenshot");
+                    System.Diagnostics.Debug.WriteLine($"Error showing snackbar: {ex.Message}");
                 }
-            }
+                finally
+                {
+                    try
+                    {
+                        if (bar != null) _windowManager?.RemoveView(bar);
+                    }
+                    catch { /* view may already be gone */ }
+                }
+            });
         }
 
         private async Task MoveToFolder(string screenshotPath, string destinationFolder)
@@ -228,7 +344,7 @@ namespace Screenshot_Organiser.Platforms.Android
                 File.Delete(screenshotPath);
 
                 var folderName = IOPath.GetFileName(destinationFolder);
-                ShowToast($"✅ Screenshot moved to {folderName}");
+                ShowBottomSnackbar($"Moved to {folderName} ✅");
 
                 System.Diagnostics.Debug.WriteLine($"✅ Screenshot moved: {screenshotPath} → {destinationPath}");
             }
@@ -371,6 +487,7 @@ namespace Screenshot_Organiser.Platforms.Android
 
                 _isServiceRunning = false;
                 HideDialog();
+                HidePicker();
 
                 _wakeLock?.Release();
                 _wakeLock = null;
