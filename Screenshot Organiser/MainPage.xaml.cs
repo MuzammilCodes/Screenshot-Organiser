@@ -141,14 +141,6 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
             await CheckAndSetupDefaultFolder();
         });
 
-
-
-    public ICommand StartMonitoringCommand =>
-        new Command(async () => await StartMonitoring(), () => CanStartMonitoring);
-
-    public ICommand StopMonitoringCommand =>
-        new Command(async () => await StopMonitoring(), () => IsMonitoring);
-
     #endregion
 
     protected override async void OnAppearing()
@@ -159,19 +151,34 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
             return;
 
         _initialLoadComplete = true;
-        await Task.Delay(InitialDelayMs);
 
-        if (!_permissionsRequested)
+        try
         {
-            _permissionsRequested = true;
-            await RequestPermissionsSequentially();
+            await Task.Delay(InitialDelayMs);
+
+            if (!_permissionsRequested)
+            {
+                _permissionsRequested = true;
+                await RequestPermissionsSequentially();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error during initial load: {ex.Message}");
         }
     }
 
     public async void OnAppResumed()
     {
-        if (_permissionsRequested)
-            await CheckPermissionsAndContinueFlow();
+        try
+        {
+            if (_permissionsRequested)
+                await CheckPermissionsAndContinueFlow();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error on app resume: {ex.Message}");
+        }
     }
 
     #region Permission Flow
@@ -473,16 +480,6 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
     }
 
-
-
-    private void SetDefaultScreenshotFolder(string path)
-    {
-        var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-        var prefs = context.GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
-
-        prefs?.Edit()?.PutString("default_screenshot_folder", path)?.Apply();
-    }
-
     #endregion
 
     #region Monitoring
@@ -508,20 +505,6 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         }
 
         MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
-    }
-
-    private async Task StartMonitoring()
-    {
-        await _monitor.StartMonitoring();
-        MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
-
-    }
-
-    private async Task StopMonitoring()
-    {
-        await _monitor.StopMonitoring();
-        MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
-
     }
 
     #endregion  
