@@ -13,11 +13,9 @@ namespace Screenshot_Organiser
         ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
     public class MainActivity : MauiAppCompatActivity
     {
-        private const int FOLDER_PICKER_REQUEST = 1001;
-        private const int DEFAULT_FOLDER_PICKER_REQUEST = 1002;
         private bool _isSettingDefaultFolder = false;
         private bool _isWaitingForFolderPicker = false;
-        private string _pendingScreenshotPath = null;
+        private string? _pendingScreenshotPath = null;
         private bool _wasLaunchedForFolderSelection = false; // Track if launched specifically for folder selection
 
         protected override void OnCreate(Bundle? savedInstanceState)
@@ -33,7 +31,7 @@ namespace Screenshot_Organiser
             ProcessIntent();
         }
 
-        protected override void OnNewIntent(Intent intent)
+        protected override void OnNewIntent(Intent? intent)
         {
             base.OnNewIntent(intent);
             Intent = intent; // Update the current intent
@@ -353,11 +351,6 @@ namespace Screenshot_Organiser
             {
                 System.Diagnostics.Debug.WriteLine($"Error showing toast: {ex.Message}");
             }
-        }
-
-        protected override void OnResume()
-        {
-            base.OnResume();
         }
     }
 }

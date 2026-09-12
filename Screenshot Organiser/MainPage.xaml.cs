@@ -136,18 +136,14 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         new Command(async () =>
         {
             if (_defaultFolderSetupComplete)
+            {
+                // Allow the user to change the default folder anytime
+                await ShowChangeDefaultFolderDialog();
                 return;
+            }
 
             await CheckAndSetupDefaultFolder();
         });
-
-
-
-    public ICommand StartMonitoringCommand =>
-        new Command(async () => await StartMonitoring(), () => CanStartMonitoring);
-
-    public ICommand StopMonitoringCommand =>
-        new Command(async () => await StopMonitoring(), () => IsMonitoring);
 
     #endregion
 
@@ -159,19 +155,34 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
             return;
 
         _initialLoadComplete = true;
-        await Task.Delay(InitialDelayMs);
 
-        if (!_permissionsRequested)
+        try
         {
-            _permissionsRequested = true;
-            await RequestPermissionsSequentially();
+            await Task.Delay(InitialDelayMs);
+
+            if (!_permissionsRequested)
+            {
+                _permissionsRequested = true;
+                await RequestPermissionsSequentially();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error during initial load: {ex.Message}");
         }
     }
 
     public async void OnAppResumed()
     {
-        if (_permissionsRequested)
-            await CheckPermissionsAndContinueFlow();
+        try
+        {
+            if (_permissionsRequested)
+                await CheckPermissionsAndContinueFlow();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error on app resume: {ex.Message}");
+        }
     }
 
     #region Permission Flow
@@ -282,14 +293,23 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
     private async Task OpenFilePermissionSettings()
     {
 #if ANDROID
-        _filePermissionRequested = true;
-
         var context = Platform.CurrentActivity ?? Android.App.Application.Context;
 
         if (Android.OS.Build.VERSION.SdkInt >= Android.OS.BuildVersionCodes.R)
         {
             if (!Android.OS.Environment.IsExternalStorageManager)
             {
+                // before sending the user to the Special App Access settings screen.
+                bool grant = await ShowStyledConfirmationDialog(
+                    "\U0001F4C1 All Files Access",
+                    "This permission allows Screenshot Organiser to detect and move screenshots between folders you choose.\n\n🔒 Everything stays on your device, giving you complete control over your files.",
+                    "Grant Access");
+
+                _filePermissionRequested = true;
+
+                if (!grant)
+                    return;
+
                 var intent = new Intent(
                     Android.Provider.Settings.ActionManageAppAllFilesAccessPermission);
 
@@ -302,11 +322,14 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
             }
             else
             {
+                _filePermissionRequested = true;
                 HasFilePermission = true;
             }
         }
         else
         {
+            _filePermissionRequested = true;
+
             var photo = await Permissions.RequestAsync<Permissions.Photos>();
             var media = await Permissions.RequestAsync<Permissions.Media>();
 
@@ -353,6 +376,50 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
 
         await ShowDefaultFolderSetupDialog();
 
+    }
+
+    private async Task ShowChangeDefaultFolderDialog()
+    {
+        var context = Platform.CurrentActivity ?? Android.App.Application.Context;
+        var prefs = context.GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
+
+        //  Prevent double popup
+        var folderSetupInProgress =
+            prefs?.GetBoolean(FolderSetupInProgressKey, false) ?? false;
+
+        if (folderSetupInProgress)
+            return;
+
+        var currentFolder = prefs?.GetString("default_screenshot_folder", null);
+        var folderName = string.IsNullOrEmpty(currentFolder)
+            ? "Not set"
+            : Path.GetFileName(currentFolder.TrimEnd('/', '\\'));
+
+        //  Lock before showing dialog
+        prefs?.Edit()?.PutBoolean(FolderSetupInProgressKey, true)?.Apply();
+
+        try
+        {
+            bool change = await ShowStyledConfirmationDialog(
+                "📂 Default Screenshot Folder",
+                $"Current folder: {folderName}\n\nDo you want to choose a different folder?",
+                "Change Folder");
+
+            if (change)
+            {
+                await OpenDefaultFolderPicker();
+            }
+            else
+            {
+                prefs?.Edit()?.PutBoolean(FolderSetupInProgressKey, false)?.Apply();
+            }
+        }
+        catch
+        {
+            // Clear lock on error
+            prefs?.Edit()?.PutBoolean(FolderSetupInProgressKey, false)?.Apply();
+            throw;
+        }
     }
 
     private async Task ShowDefaultFolderSetupDialog()
@@ -473,16 +540,6 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
     }
 
-
-
-    private void SetDefaultScreenshotFolder(string path)
-    {
-        var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-        var prefs = context.GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
-
-        prefs?.Edit()?.PutString("default_screenshot_folder", path)?.Apply();
-    }
-
     #endregion
 
     #region Monitoring
@@ -508,20 +565,6 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         }
 
         MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
-    }
-
-    private async Task StartMonitoring()
-    {
-        await _monitor.StartMonitoring();
-        MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
-
-    }
-
-    private async Task StopMonitoring()
-    {
-        await _monitor.StopMonitoring();
-        MainThread.BeginInvokeOnMainThread(UpdateComputedStates);
-
     }
 
     #endregion  
