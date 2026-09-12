@@ -161,7 +161,7 @@ BackgroundColor="{AppThemeBinding Light={StaticResource PageBackgroundLight}, Da
                 Style="{StaticResource CardTitle}" />
 
                             <Label
-                Text="Choose where screenshots are read from"
+                Text="Choose where screenshots are read from. Tap anytime to change"
                 Style="{StaticResource CardSubtitle}" />
                         </VerticalStackLayout>
 
