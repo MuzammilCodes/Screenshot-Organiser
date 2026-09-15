@@ -47,7 +47,7 @@
     <!-- App Icon -->
 
     <MauiSplashScreen Include="Resources\Splash\splash.svg"
-                      Color="#FFFFFF"
+                      Color="Transparent"
                       BaseSize="192,192"
                       Resize="true" />
     <!-- Images -->

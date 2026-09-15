@@ -39,9 +39,6 @@
     </clipPath>
   </defs>
 
-  <!-- Full Canvas Background (White) -->
-  <rect width="512" height="512" fill="#FFFFFF"/>
-
   <!-- ENLARGED APP ICON ROUNDED SQUARE (POSITIONED FURTHER FROM TOP) -->
   <rect x="56" y="56" width="400" height="400" rx="84" ry="84" fill="url(#bgGrad)"/>
 
