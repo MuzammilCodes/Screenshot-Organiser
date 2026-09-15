@@ -25,6 +25,11 @@
     <!-- Keep portable symbols for readable crash stacks in Play Console -->
     <DebugType>portable</DebugType>
 
+    <!-- Size optimizations -->
+    <AndroidLinkResources>true</AndroidLinkResources>
+    <AndroidEnableProfiledAot>true</AndroidEnableProfiledAot>
+    <EnableLLVM>false</EnableLLVM>
+
     <!-- Release signing (secrets come from environment variables, never commit them)
          Set before building:
            ANDROID_KEYSTORE_PATH      - full path to your .keystore/.jks file
@@ -67,7 +72,7 @@
 
 <ItemGroup>
   <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90" />
-   <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" />
+   <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" Condition="'$(Configuration)' == 'Debug'" />
   <PackageReference Include="CommunityToolkit.Maui" Version="15.0.1" />
 </ItemGroup>
 
