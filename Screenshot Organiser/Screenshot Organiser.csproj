@@ -2,7 +2,7 @@
 
   <!-- Always applies -->
   <PropertyGroup>
-    <TargetFrameworks>net8.0-android</TargetFrameworks>
+    <TargetFrameworks>net10.0-android</TargetFrameworks>
     <OutputType>Exe</OutputType>
     <RootNamespace>Screenshot_Organiser</RootNamespace>
     <UseMaui>true</UseMaui>
@@ -14,7 +14,7 @@
     <ApplicationVersion>1</ApplicationVersion>
 
     <SupportedOSPlatformVersion>26.0</SupportedOSPlatformVersion>
-    <TargetPlatformVersion>34</TargetPlatformVersion>
+    <TargetPlatformVersion>36</TargetPlatformVersion>
   </PropertyGroup>
 
   <!-- Release-only settings -->
@@ -36,11 +36,6 @@
     <AndroidSigningKeyAlias>$(ANDROID_KEYSTORE_ALIAS)</AndroidSigningKeyAlias>
     <AndroidSigningStorePass>$(ANDROID_KEYSTORE_PASSWORD)</AndroidSigningStorePass>
     <AndroidSigningKeyPass>$(ANDROID_KEY_PASSWORD)</AndroidSigningKeyPass>
-  </PropertyGroup>
-
-  <!-- Debug-only settings -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
-    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
   </PropertyGroup>
 
   <ItemGroup>
@@ -70,14 +65,11 @@
     <None Remove="Resources\AppIcon\appicon.svg" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Core MAUI packages -->
-    <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.91" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
-
-    <!-- Community Toolkit -->
-    <PackageReference Include="CommunityToolkit.Maui" Version="7.0.1" />
-  </ItemGroup>
+<ItemGroup>
+  <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90" />
+   <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" />
+  <PackageReference Include="CommunityToolkit.Maui" Version="15.0.1" />
+</ItemGroup>
 
   <ItemGroup>
     <MauiIcon Include="Resources\AppIcon\appicon.svg">
