@@ -12,7 +12,8 @@
 
     <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
     <ApplicationVersion>1</ApplicationVersion>
-
+    <ApplicationId>com.muzammilcodes.screenshotorganiser</ApplicationId>
+    <ApplicationTitle>Screenshot Organiser</ApplicationTitle>
     <SupportedOSPlatformVersion>26.0</SupportedOSPlatformVersion>
     <TargetPlatformVersion>36</TargetPlatformVersion>
   </PropertyGroup>
