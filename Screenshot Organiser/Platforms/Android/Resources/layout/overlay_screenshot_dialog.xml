@@ -8,17 +8,12 @@
     android:padding="24dp"
     android:gravity="center">
 
-  <ImageView
-      android:layout_width="48dp"
-      android:layout_height="48dp"
-      android:src="@drawable/ic_screenshot"
-      android:layout_marginBottom="16dp"
-      android:tint="@color/primary" />
+
 
   <TextView
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:text="📸 Screenshot Detected!"
+      android:text="Screenshot Detected!"
       android:textSize="18sp"
       android:textStyle="bold"
       android:textColor="@color/text_primary"

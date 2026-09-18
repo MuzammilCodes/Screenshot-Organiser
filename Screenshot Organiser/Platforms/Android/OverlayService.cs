@@ -1,274 +1,410 @@
 ﻿using Android.App;
 using Android.Content;
+using Android.Content.PM;
 using Android.Graphics;
-using AndroidOS = Android.OS;
+using Android.OS;
+using Android.Runtime;
 using Android.Views;
 using Android.Widget;
 using AndroidX.Core.App;
 using AndroidButton = Android.Widget.Button;
 using AndroidView = Android.Views.View;
-using AndroidTextView = Android.Widget.TextView;
-using AndroidLinearLayout = Android.Widget.LinearLayout;
-using AndroidEnvironment = Android.OS.Environment;
 using IOPath = System.IO.Path;
-using Android.Runtime;
 
-
-
-using Android.App;
-using Android.Content;
-using Android.Graphics;
-using Android.OS;
-using Android.Views;
-using Android.Widget;
-using AndroidX.Core.App;
-using Android.Content.PM;
 
 namespace Screenshot_Organiser.Platforms.Android
 {
-    [Service(Exported = false)]
+    [Service(Exported = false, ForegroundServiceType = ForegroundService.TypeDataSync)]
     public class OverlayService : Service
     {
         private IWindowManager? _windowManager;
         private AndroidView? _overlayView;
         private static OverlayService? _instance;
         private const int NOTIFICATION_ID = 1001;
+        private PowerManager.WakeLock? _wakeLock;
+        private bool _isServiceRunning = false;
 
         public static OverlayService? Instance => _instance;
 
         public override void OnCreate()
         {
             base.OnCreate();
-            _instance = this;
-            _windowManager = GetSystemService(WindowService)?.JavaCast<IWindowManager>();
-            CreateNotificationChannel();
+
+            try
+            {
+                _instance = this;
+                _isServiceRunning = true;
+
+                _windowManager = GetSystemService(WindowService)?.JavaCast<IWindowManager>();
+
+                // Acquire wake lock to prevent service from being killed
+                var powerManager = GetSystemService(PowerService) as PowerManager;
+                _wakeLock = powerManager?.NewWakeLock(WakeLockFlags.Partial, "ScreenshotOrganizer::ServiceWakeLock");
+                _wakeLock?.Acquire();
+
+                CreateNotificationChannel();
+
+                var notification = CreateNotification();
+                StartForeground(NOTIFICATION_ID, notification);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error creating notification: {ex.Message}");
+            }
         }
 
         public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId)
         {
             try
             {
-                if (AndroidOS.Build.VERSION.SdkInt >= AndroidOS.BuildVersionCodes.Q)
+                // Handle stop service action
+                if (intent?.Action == "STOP_SERVICE")
                 {
-                    StartForeground(NOTIFICATION_ID, CreateNotification(), ForegroundService.TypeSpecialUse);
+                    StopSelf();
+                    return StartCommandResult.NotSticky;
                 }
-                else
+
+                // Ensure we're running as foreground service
+                if (_isServiceRunning)
                 {
-                    StartForeground(NOTIFICATION_ID, CreateNotification());
+                    var notification = CreateNotification();
+                    StartForeground(NOTIFICATION_ID, notification);
                 }
+
+                return StartCommandResult.Sticky; // Restart if killed
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error starting foreground service: {ex.Message}");
-                // Fallback: try without foreground service
+                System.Diagnostics.Debug.WriteLine($"Error in OnStartCommand: {ex.Message}");
                 return StartCommandResult.Sticky;
             }
-
-            return StartCommandResult.Sticky;
         }
 
         public override IBinder? OnBind(Intent? intent) => null;
 
         public void ShowScreenshotDialog(string screenshotPath)
         {
-            if (_windowManager == null) return;
+            if (_windowManager == null || !_isServiceRunning) return;
 
-            MainThread.BeginInvokeOnMainThread(() =>
-            {
-                try
-                {
-                    // Remove existing overlay if present
-                    HideDialog();
-
-                    // Create overlay layout
-                    _overlayView = LayoutInflater.From(this)?.Inflate(Resource.Layout.overlay_screenshot_dialog, null);
-
-                    if (_overlayView == null) return;
-
-                    // Setup button click handlers
-                    var selectBtn = _overlayView.FindViewById<AndroidButton>(Resource.Id.btnSelect);
-                    var cancelBtn = _overlayView.FindViewById<AndroidButton>(Resource.Id.btnCancel);
-
-                    selectBtn!.Click += async (s, e) =>
-                    {
-                        HideDialog();
-                        await HandleSelectFolder(screenshotPath);
-                    };
-
-                    cancelBtn!.Click += (s, e) =>
-                    {
-                        HideDialog();
-                        ShowToast("Screenshot saved in original location");
-                    };
-
-                    // Setup overlay parameters
-                    var layoutParams = new WindowManagerLayoutParams(
-                        WindowManagerLayoutParams.MatchParent,
-                        WindowManagerLayoutParams.WrapContent,
-                        Build.VERSION.SdkInt >= BuildVersionCodes.O
-                            ? WindowManagerTypes.ApplicationOverlay
-                            : WindowManagerTypes.Phone,
-                        WindowManagerFlags.NotFocusable | WindowManagerFlags.NotTouchModal,
-                        Format.Translucent)
-                    {
-                        Gravity = GravityFlags.Center
-                    };
-
-                    _windowManager.AddView(_overlayView, layoutParams);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Error showing overlay: {ex.Message}");
-                }
-            });
-        }
-
-        private async Task HandleSelectFolder(string screenshotPath)
-        {
             try
             {
-                // Create folder selection dialog
-                var folderDialog = new AlertDialog.Builder(this)
-                    .SetTitle("Select Folder")
-                    .SetMessage("Choose where to save the screenshot")
-                    .SetPositiveButton("Browse Folders", async (s, e) =>
-                    {
-                        await OpenFolderPicker(screenshotPath);
-                    })
-                    .SetNeutralButton("Pictures Folder", async (s, e) =>
-                    {
-                        var picturesPath = IOPath.Combine(
-                            AndroidEnvironment.ExternalStorageDirectory?.AbsolutePath ?? "/storage/emulated/0",
-                            "Pictures");
-                        await SaveScreenshot(screenshotPath, picturesPath);
-                    })
-                    .SetNegativeButton("Cancel", (s, e) =>
-                    {
-                        ShowToast("Screenshot remains in original location");
-                    })
-                    .Create();
-
-                // Make dialog appear as overlay
-                if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+                MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    folderDialog.Window?.SetType(WindowManagerTypes.ApplicationOverlay);
-                }
-                else
-                {
-                    folderDialog.Window?.SetType(WindowManagerTypes.SystemAlert);
-                }
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Showing overlay for: {screenshotPath}");
 
-                folderDialog.Show();
+                        HideDialog();
+
+                        _overlayView = LayoutInflater.From(this)?.Inflate(Screenshot_Organiser.Resource.Layout.overlay_screenshot_dialog, null);
+                        if (_overlayView == null) return;
+
+                        // Setup button click handlers
+                        var selectBtn = _overlayView.FindViewById<AndroidButton>(Screenshot_Organiser.Resource.Id.btnSelect);
+                        var cancelBtn = _overlayView.FindViewById<AndroidButton>(Screenshot_Organiser.Resource.Id.btnCancel);
+
+                        selectBtn!.Click += async (s, e) =>
+                        {
+                            try
+                            {
+                                System.Diagnostics.Debug.WriteLine("Select button clicked");
+                                HideDialog();
+                                await OpenSystemFilePicker(screenshotPath);
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Error in select button click: {ex.Message}");
+                            }
+                        };
+
+                        cancelBtn!.Click += (s, e) =>
+                        {
+                            try
+                            {
+                                System.Diagnostics.Debug.WriteLine("Cancel button clicked");
+                                HideDialog();
+                                MarkFileAsProcessed(screenshotPath);
+                                ShowToast("Screenshot kept in original location");
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Error in cancel button click: {ex.Message}");
+                            }
+                        };
+
+                        int screenWidth = Resources?.DisplayMetrics?.WidthPixels ?? 1080;
+                        int targetWidth = (int)(screenWidth * 0.9);
+
+                        var layoutParams = new WindowManagerLayoutParams(
+                            targetWidth,
+                            WindowManagerLayoutParams.WrapContent,
+                            Build.VERSION.SdkInt >= BuildVersionCodes.O
+                                ? WindowManagerTypes.ApplicationOverlay
+                                : WindowManagerTypes.Phone,
+                            WindowManagerFlags.NotFocusable | WindowManagerFlags.NotTouchModal,
+                            Format.Translucent)
+                        {
+                            Gravity = GravityFlags.Center
+                        };
+
+                        _windowManager.AddView(_overlayView, layoutParams);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error creating overlay view: {ex.Message}");
+                    }
+                });
             }
             catch (Exception ex)
             {
-                ShowToast($"Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error showing overlay: {ex.Message}");
             }
         }
 
-        private async Task OpenFolderPicker(string screenshotPath)
+        private async Task OpenSystemFilePicker(string screenshotPath)
         {
             try
             {
-                var intent = new Intent(Intent.ActionOpenDocumentTree);
-                intent.AddFlags(ActivityFlags.NewTask);
-
-                // Store screenshot path for later use
                 var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
-                prefs?.Edit()?.PutString("pending_screenshot", screenshotPath)?.Apply();
+                var editor = prefs?.Edit();
+                editor?.PutString("pending_screenshot", screenshotPath);
+                editor?.Apply();
+
+                await Task.Delay(300);
+
+                var intent = new Intent(this, typeof(MainActivity));
+                // Changed: Remove ExcludeFromRecents flag to allow proper app flow
+                intent.AddFlags(ActivityFlags.NewTask | ActivityFlags.ClearTop);
+                intent.PutExtra("action", "pick_folder");
+                intent.PutExtra("timestamp", DateTimeOffset.Now.ToUnixTimeMilliseconds());
 
                 StartActivity(intent);
             }
             catch (Exception ex)
             {
-                ShowToast($"Failed to open folder picker: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error opening file picker: {ex.Message}");
+                try
+                {
+                    await MoveToFolder(screenshotPath, "/storage/emulated/0/Download");
+                    ShowToast("📥 Moved to Downloads folder");
+                }
+                catch (Exception fallbackEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Fallback move also failed: {fallbackEx.Message}");
+                    ShowToast("❌ Failed to move screenshot");
+                }
             }
         }
 
-        private async Task SaveScreenshot(string sourcePath, string destinationFolder)
+        private async Task MoveToFolder(string screenshotPath, string destinationFolder)
         {
             try
             {
+                await Task.Delay(500);
+
+                if (!File.Exists(screenshotPath))
+                {
+                    ShowToast("❌ Screenshot file not found");
+                    return;
+                }
+
                 Directory.CreateDirectory(destinationFolder);
 
-                var fileName = IOPath.GetFileName(sourcePath);
+                var fileName = IOPath.GetFileName(screenshotPath);
                 var destinationPath = IOPath.Combine(destinationFolder, fileName);
 
-                // Wait for file to be fully written
-                await Task.Delay(1000);
+                int counter = 1;
+                while (File.Exists(destinationPath))
+                {
+                    var nameWithoutExt = IOPath.GetFileNameWithoutExtension(fileName);
+                    var extension = IOPath.GetExtension(fileName);
+                    destinationPath = IOPath.Combine(destinationFolder, $"{nameWithoutExt}_{counter}{extension}");
+                    counter++;
+                }
 
-                File.Copy(sourcePath, destinationPath, true);
-                File.Delete(sourcePath);
+                ModernScreenshotMonitor.MarkFileAsMoved(screenshotPath);
 
-                ShowToast($"Screenshot saved to {IOPath.GetFileName(destinationFolder)}");
+                File.Copy(screenshotPath, destinationPath, overwrite: true);
+                File.Delete(screenshotPath);
+
+                var folderName = IOPath.GetFileName(destinationFolder);
+                ShowToast($"✅ Screenshot moved to {folderName}");
+
+                System.Diagnostics.Debug.WriteLine($"✅ Screenshot moved: {screenshotPath} → {destinationPath}");
             }
             catch (Exception ex)
             {
-                ShowToast($"Failed to save: {ex.Message}");
+                ShowToast($"❌ Failed to move: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Move error: {ex.Message}");
+            }
+        }
+
+        private void MarkFileAsProcessed(string filePath)
+        {
+            try
+            {
+                var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
+                var editor = prefs?.Edit();
+                editor?.PutLong($"processed_{filePath.GetHashCode()}", DateTimeOffset.Now.ToUnixTimeMilliseconds());
+                editor?.Apply();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error marking file as processed: {ex.Message}");
             }
         }
 
         public void HideDialog()
         {
-            if (_overlayView != null && _windowManager != null)
+            try
             {
-                try
+                if (_overlayView != null && _windowManager != null)
                 {
                     _windowManager.RemoveView(_overlayView);
+                    System.Diagnostics.Debug.WriteLine("Overlay dialog hidden");
                 }
-                catch (Exception)
-                {
-                    // View might not be attached
-                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error hiding overlay: {ex.Message}");
+            }
+            finally
+            {
                 _overlayView = null;
             }
         }
 
         private void ShowToast(string message)
         {
-            MainThread.BeginInvokeOnMainThread(() =>
+            try
             {
-                Toast.MakeText(this, message, ToastLength.Long)?.Show();
-            });
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    try
+                    {
+                        Toast.MakeText(this, message, ToastLength.Long)?.Show();
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error showing toast: {ex.Message}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in ShowToast: {ex.Message}");
+            }
         }
 
         private void CreateNotificationChannel()
         {
-            if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+            try
             {
-                var channel = new NotificationChannel(
-                    "screenshot_service",
-                    "Screenshot Monitor",
-                    NotificationImportance.Low)
+                if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
                 {
-                    Description = "Monitors for new screenshots"
-                };
+                    var channel = new NotificationChannel(
+                        "screenshot_service",
+                        "Screenshot Organizer",
+                        NotificationImportance.Low)
+                    {
+                        Description = "Monitors for new screenshots and organizes them automatically"
+                    };
 
-                var notificationManager = GetSystemService(NotificationService) as NotificationManager;
-                notificationManager?.CreateNotificationChannel(channel);
+                    channel.SetShowBadge(false);
+                    channel.EnableLights(false);
+                    channel.EnableVibration(false);
+                    channel.SetSound(null, null);
+
+                    var notificationManager = GetSystemService(NotificationService) as NotificationManager;
+                    notificationManager?.CreateNotificationChannel(channel);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error creating notification channel: {ex.Message}");
             }
         }
 
         private Notification CreateNotification()
         {
-            var intent = new Intent(this, typeof(MainActivity));
-            var pendingIntent = PendingIntent.GetActivity(this, 0, intent, PendingIntentFlags.Immutable);
+            try
+            {
+                var intent = new Intent(this, typeof(MainActivity));
+                intent.AddFlags(ActivityFlags.SingleTop | ActivityFlags.ClearTop);
+                var pendingIntent = PendingIntent.GetActivity(this, 0, intent,
+                    Build.VERSION.SdkInt >= BuildVersionCodes.M ? PendingIntentFlags.Immutable : PendingIntentFlags.UpdateCurrent);
 
-            return new NotificationCompat.Builder(this, "screenshot_service")
-                .SetContentTitle("Screenshot Monitor")
-                .SetContentText("Monitoring for screenshots...")
-                .SetSmallIcon(Resource.Drawable.ic_screenshot)
-                .SetContentIntent(pendingIntent)
-                .SetOngoing(true)
-                .SetPriority(NotificationCompat.PriorityLow)
-                .Build();
+                var stopIntent = new Intent(this, typeof(OverlayService));
+                stopIntent.SetAction("STOP_SERVICE");
+                var stopPendingIntent = PendingIntent.GetService(this, 1, stopIntent,
+                    Build.VERSION.SdkInt >= BuildVersionCodes.M ? PendingIntentFlags.Immutable : PendingIntentFlags.UpdateCurrent);
+
+                return new NotificationCompat.Builder(this, "screenshot_service")
+                    .SetContentTitle("Screenshot Organizer Active")
+                    .SetContentText("Monitoring screenshots in background")
+                    .SetContentIntent(pendingIntent)
+                    .SetOngoing(true)
+                    .SetPriority(NotificationCompat.PriorityLow)
+                    .SetAutoCancel(false)
+                    .SetCategory(NotificationCompat.CategoryService)
+                    .AddAction(global::Android.Resource.Drawable.IcMenuCloseClearCancel, "Stop", stopPendingIntent)
+                    .SetSmallIcon(global::Android.Resource.Drawable.IcMenuCamera)
+                    .Build();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error creating notification: {ex.Message}");
+                // Return a basic notification as fallback
+                return new NotificationCompat.Builder(this, "screenshot_service")
+                    .SetContentTitle("Screenshot Organizer")
+                    .SetContentText("Running...")
+                    .SetSmallIcon(global::Android.Resource.Drawable.IcMenuCamera)
+                    .Build();
+            }
         }
 
         public override void OnDestroy()
         {
-            HideDialog();
-            _instance = null;
-            base.OnDestroy();
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("OverlayService OnDestroy called");
+
+                _isServiceRunning = false;
+                HideDialog();
+
+                _wakeLock?.Release();
+                _wakeLock = null;
+
+                _instance = null;
+                StopForeground(true);
+
+                base.OnDestroy();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in OnDestroy: {ex.Message}");
+                base.OnDestroy();
+            }
+        }
+
+        public override void OnTaskRemoved(Intent? rootIntent)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("OverlayService OnTaskRemoved - App removed from recent apps");
+                base.OnTaskRemoved(rootIntent);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in OnTaskRemoved: {ex.Message}");
+                base.OnTaskRemoved(rootIntent);
+            }
+        }
+
+        public override void OnLowMemory()
+        {
+            System.Diagnostics.Debug.WriteLine("OverlayService OnLowMemory called");
+            base.OnLowMemory();
         }
     }
 }
