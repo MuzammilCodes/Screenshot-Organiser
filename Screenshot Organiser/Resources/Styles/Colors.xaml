@@ -28,6 +28,41 @@
     <Color x:Key="Gray900">#212121</Color>
     <Color x:Key="Gray950">#141414</Color>
 
+    <!-- ===== App semantic colors (light / dark pairs) =====
+         Keep in sync with Platforms\Android\FolderPickerViewFactory palette -->
+
+    <!-- Page background -->
+    <Color x:Key="PageBackgroundLight">#F8FAFC</Color>
+    <Color x:Key="PageBackgroundDark">#1E2021</Color>
+
+    <!-- Card / surface background -->
+    <Color x:Key="CardBackgroundLight">#FAFAFA</Color>
+    <Color x:Key="CardBackgroundDark">#313638</Color>
+
+    <!-- Primary text -->
+    <Color x:Key="TextPrimaryLight">#0F172A</Color>
+    <Color x:Key="TextPrimaryDark">#F5F5F5</Color>
+
+    <!-- Secondary text -->
+    <Color x:Key="TextSecondaryLight">#64748B</Color>
+    <Color x:Key="TextSecondaryDark">#B0B0B0</Color>
+
+    <!-- Divider -->
+    <Color x:Key="DividerLight">#E2E8F0</Color>
+    <Color x:Key="DividerDark">#3E4446</Color>
+
+    <!-- Accent (buttons, toggles) -->
+    <Color x:Key="AccentLight">#1976D2</Color>
+    <Color x:Key="AccentDark">#64A8E8</Color>
+
+    <!-- Success -->
+    <Color x:Key="SuccessLight">#16A34A</Color>
+    <Color x:Key="SuccessDark">#4ADE80</Color>
+
+    <!-- Card shadow -->
+    <Color x:Key="ShadowLight">#331E293B</Color>
+    <Color x:Key="ShadowDark">#66000000</Color>
+
     <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource Primary}"/>
     <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource Secondary}"/>
     <SolidColorBrush x:Key="TertiaryBrush" Color="{StaticResource Tertiary}"/>
