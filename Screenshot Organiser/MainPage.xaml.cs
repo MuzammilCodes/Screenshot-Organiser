@@ -363,7 +363,7 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
             return;
         }
 
-        var folder = prefs?.GetString("default_screenshot_folder", null);
+        var folder = Screenshot_Organiser.Platforms.Android.FolderPreferenceStore.GetDefaultFolder(context);
 
         if (!string.IsNullOrEmpty(folder))
         {
@@ -390,7 +390,7 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         if (folderSetupInProgress)
             return;
 
-        var currentFolder = prefs?.GetString("default_screenshot_folder", null);
+        var currentFolder = Screenshot_Organiser.Platforms.Android.FolderPreferenceStore.GetDefaultFolder(context);
         var folderName = string.IsNullOrEmpty(currentFolder)
             ? "Not set"
             : Path.GetFileName(currentFolder.TrimEnd('/', '\\'));

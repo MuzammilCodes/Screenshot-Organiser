@@ -41,9 +41,9 @@ public class ModernScreenshotMonitor : IDisposable
         try
         {
             var context = Platform.CurrentActivity ?? Android.App.Application.Context;
-            var prefs = context.GetSharedPreferences("screenshot_prefs", Android.Content.FileCreationMode.Private);
-            _defaultScreenshotFolder = prefs?.GetString("default_screenshot_folder",
-                "/storage/emulated/0/Pictures/Screenshots");
+            _defaultScreenshotFolder =
+                Platforms.Android.FolderPreferenceStore.GetDefaultFolder(context)
+                ?? "/storage/emulated/0/Pictures/Screenshots";
 
             System.Diagnostics.Debug.WriteLine($"Monitoring folder: {_defaultScreenshotFolder}");
         }

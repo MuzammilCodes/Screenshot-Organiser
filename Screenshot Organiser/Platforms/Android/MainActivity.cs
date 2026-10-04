@@ -255,8 +255,7 @@ namespace Screenshot_Organiser
 
         private void SetDefaultScreenshotFolder(string folderPath)
         {
-            var prefs = GetSharedPreferences("screenshot_prefs", FileCreationMode.Private);
-            prefs?.Edit()?.PutString("default_screenshot_folder", folderPath)?.Apply();
+            FolderPreferenceStore.SaveDefaultFolder(this, folderPath);
 
             Toast.MakeText(this, $"Default screenshot folder set: {Path.GetFileName(folderPath)}",
                 ToastLength.Long)?.Show();

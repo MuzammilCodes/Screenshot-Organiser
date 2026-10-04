@@ -18,18 +18,19 @@
     <TargetPlatformVersion>36</TargetPlatformVersion>
   </PropertyGroup>
 
-  <!-- Release-only settings -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <AndroidSupportedAbis>arm64-v8a</AndroidSupportedAbis>
     <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
     <AndroidPackageFormat>aab</AndroidPackageFormat>
-    <!-- Keep portable symbols for readable crash stacks in Play Console -->
     <DebugType>portable</DebugType>
 
-    <!-- Size optimizations -->
     <AndroidLinkResources>true</AndroidLinkResources>
-    <AndroidEnableProfiledAot>true</AndroidEnableProfiledAot>
+    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
     <EnableLLVM>false</EnableLLVM>
+
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <InvariantGlobalization>true</InvariantGlobalization>
 
     <!-- Release signing (secrets come from environment variables, never commit them)
          Set before building:
@@ -54,9 +55,6 @@
     <!-- Images -->
     <MauiImage Include="Resources\Images\*" />
 
-    <!-- Custom Fonts -->
-    <MauiFont Include="Resources\Fonts\*" />
-
     <!-- Raw Assets -->
     <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
@@ -74,13 +72,10 @@
 <ItemGroup>
   <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90" />
    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" Condition="'$(Configuration)' == 'Debug'" />
-  <PackageReference Include="CommunityToolkit.Maui" Version="15.0.1" />
 </ItemGroup>
 
   <ItemGroup>
-    <MauiIcon Include="Resources\AppIcon\appicon.svg">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </MauiIcon>
+    <MauiIcon Include="Resources\AppIcon\appicon.svg"></MauiIcon>
   </ItemGroup>
 
   <ItemGroup>
