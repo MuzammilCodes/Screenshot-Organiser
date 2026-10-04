@@ -77,7 +77,7 @@ namespace Screenshot_Organiser
         {
             try
             {
-                ShowFolderPickerDialog("📂 Choose default folder", "Select", STORAGE_ROOT,
+                ShowFolderPickerDialog("Choose default folder", "Select", STORAGE_ROOT,
                     onFolderSelected: folderPath =>
                     {
                         _isSettingDefaultFolder = false;
@@ -103,7 +103,7 @@ namespace Screenshot_Organiser
         {
             try
             {
-                ShowFolderPickerDialog("📂 Move screenshot to…", "Move", STORAGE_ROOT,
+                ShowFolderPickerDialog("Move screenshot to…", "Move", STORAGE_ROOT,
                     onFolderSelected: async folderPath =>
                     {
                         _isWaitingForFolderPicker = false;

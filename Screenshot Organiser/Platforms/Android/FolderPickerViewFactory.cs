@@ -4,6 +4,7 @@ using Android.Views;
 using Android.Widget;
 using AndroidButton = Android.Widget.Button;
 using AndroidView = Android.Views.View;
+using AndroidPaint = Android.Graphics.Paint;
 using Color = Android.Graphics.Color;
 using ListView = Android.Widget.ListView;
 using IOPath = System.IO.Path;
@@ -35,6 +36,26 @@ namespace Screenshot_Organiser.Platforms.Android
         {
             var uiMode = context.Resources?.Configuration?.UiMode & global::Android.Content.Res.UiMode.NightMask;
             return uiMode == global::Android.Content.Res.UiMode.NightYes;
+        }
+
+        // Material You dynamic accent on Android 12+, app accent otherwise
+        private static Color ThemeAccent(Context context)
+        {
+            if (global::Android.OS.Build.VERSION.SdkInt >= global::Android.OS.BuildVersionCodes.S)
+            {
+                try
+                {
+                    var resId = IsDarkMode(context)
+                        ? global::Android.Resource.Color.SystemAccent1200
+                        : global::Android.Resource.Color.SystemAccent1600;
+                    return new Color(context.GetColor(resId));
+                }
+                catch
+                {
+                    // fall through to static accent
+                }
+            }
+            return Color.ParseColor(AccentColor);
         }
 
         private static Color CardColor(Context context) =>
@@ -72,7 +93,7 @@ namespace Screenshot_Organiser.Platforms.Android
 
             var card = CreateCard(context, Dp);
 
-            card.AddView(CreateTitle(context, title));
+            card.AddView(CreateFolderTitle(context, title));
 
             // Current path subtitle
             var pathLabel = new TextView(context)
@@ -103,12 +124,12 @@ namespace Screenshot_Organiser.Platforms.Android
             bool canGoUp = !string.Equals(currentPath.TrimEnd('/'), StorageRoot, StringComparison.OrdinalIgnoreCase);
 
             var items = new List<string>();
-            if (canGoUp) items.Add("⬆️  ..");
-            items.AddRange(subFolders.Select(d => "📁  " + IOPath.GetFileName(d)));
+            if (canGoUp) items.Add("..");
+            items.AddRange(subFolders.Select(d => IOPath.GetFileName(d)));
 
             var listView = new ListView(context)
             {
-                Adapter = new FolderListAdapter(context, items),
+                Adapter = new FolderListAdapter(context, items, canGoUp),
                 Divider = null
             };
             listView.ItemClick += (s, e) =>
@@ -177,7 +198,7 @@ namespace Screenshot_Organiser.Platforms.Android
 
             var card = CreateCard(context, Dp);
 
-            card.AddView(CreateTitle(context, "📁 Create new folder"));
+            card.AddView(CreateFolderTitle(context, "Create new folder"));
 
             var input = new EditText(context) { Hint = "Folder name" };
             input.SetTextColor(TitleColor(context));
@@ -237,7 +258,7 @@ namespace Screenshot_Organiser.Platforms.Android
 
             var card = CreateCard(context, Dp);
 
-            card.AddView(CreateTitle(context, title));
+            card.AddView(CreateFolderTitle(context, title));
 
             var messageLabel = new TextView(context) { Text = message };
             messageLabel.SetTextColor(SecondaryColor(context));
@@ -299,18 +320,21 @@ namespace Screenshot_Organiser.Platforms.Android
 
             var card = CreateCard(context, Dp);
 
-            card.AddView(CreateTitle(context, "📸 Screenshot detected!"));
+            var titleView = CreateTitle(context, "Screenshot detected!");
+            titleView.Gravity = GravityFlags.CenterHorizontal;
+            card.AddView(titleView);
 
             var messageLabel = new TextView(context) { Text = "Where would you like to save it?" };
             messageLabel.SetTextColor(SecondaryColor(context));
             messageLabel.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 14);
             messageLabel.SetPadding(0, Dp(6), 0, Dp(6));
+            messageLabel.Gravity = GravityFlags.CenterHorizontal;
             card.AddView(messageLabel);
 
             var buttonRow = CreateButtonRow(context, Dp);
 
             var cancelBtn = CreateFlatButton(context, "Cancel", SecondaryColor(context));
-            var selectBtn = CreatePillButton(context, "📁 Select folder", Dp);
+            var selectBtn = CreatePillButton(context, "Select folder", Dp, withFolderIcon: true);
 
             cancelBtn.Click += (s, e) => onCancel();
             selectBtn.Click += (s, e) => onSelectFolder();
@@ -338,27 +362,104 @@ namespace Screenshot_Organiser.Platforms.Android
         }
 
         /// <summary>
-        /// Adapter that forces the row text color so folder names stay visible
-        /// regardless of the host theme (e.g. dark mode makes SimpleListItem1
-        /// text white on our white card).
+        /// Adapter rendering each row with a theme-tinted folder icon and the
+        /// folder name, keeping text visible regardless of the host theme.
         /// </summary>
         private sealed class FolderListAdapter : ArrayAdapter<string>
         {
-            public FolderListAdapter(Context context, IList<string> items)
+            private readonly bool _canGoUp;
+
+            public FolderListAdapter(Context context, IList<string> items, bool canGoUp)
                 : base(context, global::Android.Resource.Layout.SimpleListItem1, items)
             {
+                _canGoUp = canGoUp;
             }
 
             public override AndroidView GetView(int position, AndroidView? convertView, ViewGroup parent)
             {
-                var view = base.GetView(position, convertView, parent);
-                if (view is TextView textView)
+                var density = Context.Resources?.DisplayMetrics?.Density ?? 1f;
+                int Dp(int dp) => (int)(dp * density);
+
+                LinearLayout row;
+                ImageView icon;
+                TextView label;
+
+                if (convertView is LinearLayout existing && existing.ChildCount == 2)
                 {
-                    textView.SetTextColor(TitleColor(Context));
-                    textView.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 15);
+                    row = existing;
+                    icon = (ImageView)existing.GetChildAt(0)!;
+                    label = (TextView)existing.GetChildAt(1)!;
                 }
-                return view;
+                else
+                {
+                    row = new LinearLayout(Context) { Orientation = Orientation.Horizontal };
+                    row.SetGravity(GravityFlags.CenterVertical);
+                    row.SetPadding(Dp(8), Dp(10), Dp(8), Dp(10));
+
+                    icon = new ImageView(Context);
+                    row.AddView(icon, new LinearLayout.LayoutParams(Dp(22), Dp(22)));
+
+                    label = new TextView(Context);
+                    label.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 15);
+                    var labelParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+                    { MarginStart = Dp(12) };
+                    row.AddView(label, labelParams);
+                }
+
+                label.SetTextColor(TitleColor(Context));
+
+                bool isUpRow = _canGoUp && position == 0;
+                if (isUpRow)
+                {
+                    var back = Context.GetDrawable(Resource.Drawable.ic_back)?.Mutate();
+                    back?.SetTint(ThemeAccent(Context));
+                    icon.Visibility = ViewStates.Visible;
+                    icon.SetImageDrawable(back);
+                    label.Text = "Back";
+                }
+                else
+                {
+                    icon.Visibility = ViewStates.Visible;
+                    icon.SetImageDrawable(new FolderDrawable(ThemeAccent(Context)));
+                    label.Text = GetItem(position);
+                }
+
+                return row;
             }
+        }
+
+        /// <summary>Canvas-drawn folder glyph so no emoji/OEM font variance.</summary>
+        private sealed class FolderDrawable : global::Android.Graphics.Drawables.Drawable
+        {
+            private readonly AndroidPaint _paint;
+
+            public FolderDrawable(Color color)
+            {
+                _paint = new AndroidPaint(PaintFlags.AntiAlias) { Color = color };
+                _paint.SetStyle(AndroidPaint.Style.Fill);
+            }
+
+            public override void Draw(Canvas canvas)
+            {
+                var b = Bounds;
+                float w = b.Width(), h = b.Height();
+                float left = b.Left + w * 0.06f, right = b.Right - w * 0.06f;
+                float top = b.Top + h * 0.16f, bottom = b.Bottom - h * 0.14f;
+                float tabWidth = w * 0.40f, tabHeight = h * 0.16f;
+                float radius = w * 0.10f;
+
+                using var path = new global::Android.Graphics.Path();
+                path.AddRoundRect(left, top, left + tabWidth, top + tabHeight * 2f, radius, radius, global::Android.Graphics.Path.Direction.Cw!);
+                path.AddRoundRect(left, top + tabHeight, right, bottom, radius, radius, global::Android.Graphics.Path.Direction.Cw!);
+                canvas.DrawPath(path, _paint);
+            }
+
+            public override void SetAlpha(int alpha) => _paint.Alpha = alpha;
+
+            public override void SetColorFilter(ColorFilter? colorFilter) => _paint.SetColorFilter(colorFilter);
+
+            public override int Opacity => (int)global::Android.Graphics.Format.Translucent;
         }
 
         private static LinearLayout CreateCard(Context context, Func<int, int> dp)
@@ -382,6 +483,27 @@ namespace Screenshot_Organiser.Platforms.Android
             return title;
         }
 
+        private static LinearLayout CreateFolderTitle(Context context, string text)
+        {
+            var density = context.Resources?.DisplayMetrics?.Density ?? 1f;
+            int Dp(int dp) => (int)(dp * density);
+
+            var row = new LinearLayout(context) { Orientation = Orientation.Horizontal };
+            row.SetGravity(GravityFlags.CenterVertical);
+
+            var icon = new ImageView(context);
+            icon.SetImageDrawable(new FolderDrawable(ThemeAccent(context)));
+            row.AddView(icon, new LinearLayout.LayoutParams(Dp(22), Dp(22)));
+
+            var title = CreateTitle(context, text);
+            var titleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+            { MarginStart = Dp(10) };
+            row.AddView(title, titleParams);
+
+            return row;
+        }
+
         private static LinearLayout CreateButtonRow(Context context, Func<int, int> dp)
         {
             var buttonRow = new LinearLayout(context) { Orientation = Orientation.Horizontal };
@@ -399,7 +521,7 @@ namespace Screenshot_Organiser.Platforms.Android
             return btn;
         }
 
-        private static AndroidButton CreatePillButton(Context context, string text, Func<int, int> dp)
+        private static AndroidButton CreatePillButton(Context context, string text, Func<int, int> dp, bool withFolderIcon = false)
         {
             var btn = new AndroidButton(context) { Text = text };
             btn.SetTextColor(Color.White);
@@ -410,6 +532,23 @@ namespace Screenshot_Organiser.Platforms.Android
             bg.SetCornerRadius(dp(20));
             btn.Background = bg;
             btn.SetPadding(dp(16), 0, dp(16), 0);
+
+            if (withFolderIcon)
+            {
+                // Inline ImageSpan keeps the icon tight against the centered text
+                var icon = new FolderDrawable(Color.White);
+                icon.SetBounds(0, 0, dp(15), dp(15));
+
+                var alignment = global::Android.OS.Build.VERSION.SdkInt >= global::Android.OS.BuildVersionCodes.Q
+                    ? global::Android.Text.Style.SpanAlign.Center
+                    : global::Android.Text.Style.SpanAlign.Baseline;
+
+                var spannable = new global::Android.Text.SpannableString("x " + text);
+                spannable.SetSpan(new global::Android.Text.Style.ImageSpan(icon, alignment),
+                    0, 1, global::Android.Text.SpanTypes.ExclusiveExclusive);
+                btn.TextFormatted = spannable;
+            }
+
             return btn;
         }
     }

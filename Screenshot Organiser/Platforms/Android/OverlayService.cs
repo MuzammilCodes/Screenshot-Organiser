@@ -171,7 +171,7 @@ namespace Screenshot_Organiser.Platforms.Android
 
                     var card = FolderPickerViewFactory.BuildFolderPickerCard(
                         this,
-                        title: "📂 Move screenshot to…",
+                        title: "Move screenshot to…",
                         confirmText: "Move",
                         currentPath: currentPath,
                         onNavigate: path => ShowFolderPickerOverlay(screenshotPath, path),

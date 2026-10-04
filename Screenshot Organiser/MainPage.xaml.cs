@@ -301,7 +301,7 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
             {
                 // before sending the user to the Special App Access settings screen.
                 bool grant = await ShowStyledConfirmationDialog(
-                    "\U0001F4C1 All Files Access",
+                    "All Files Access",
                     "This permission allows Screenshot Organiser to detect and move screenshots between folders you choose.\n\n🔒 Everything stays on your device, giving you complete control over your files.",
                     "Grant Access");
 
@@ -401,7 +401,7 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         try
         {
             bool change = await ShowStyledConfirmationDialog(
-                "📂 Default Screenshot Folder",
+                "Default Screenshot Folder",
                 $"Current folder: {folderName}\n\nDo you want to choose a different folder?",
                 "Change Folder");
 
@@ -430,7 +430,7 @@ public partial class MainPage : ContentPage, INotifyPropertyChanged
         try
         {
             bool choose = await ShowStyledConfirmationDialog(
-                "📂 Default Screenshot Folder",
+                "Default Screenshot Folder",
                 "Select where screenshots are stored",
                 "Select Folder");
 
