@@ -283,7 +283,7 @@ namespace Screenshot_Organiser.Platforms.Android
         }
 
         /// <summary>
-        /// Builds a small bottom snackbar-style card, e.g. "Moved to Pictures ✅".
+        /// Builds a small snackbar-style card, e.g. "Moved" with a check icon.
         /// </summary>
         public static AndroidView BuildSnackbarCard(Context context, string message)
         {
@@ -303,6 +303,11 @@ namespace Screenshot_Organiser.Platforms.Android
             label.SetTextColor(Color.White);
             label.SetTextSize(global::Android.Util.ComplexUnitType.Sp, 14);
             bar.AddView(label);
+
+            var check = new ImageView(context);
+            check.SetImageDrawable(context.GetDrawable(Resource.Drawable.ic_check));
+            var checkParams = new LinearLayout.LayoutParams(Dp(18), Dp(18)) { MarginStart = Dp(8) };
+            bar.AddView(check, checkParams);
 
             return bar;
         }

@@ -279,7 +279,7 @@ namespace Screenshot_Organiser.Platforms.Android
                 {
                     bar = FolderPickerViewFactory.BuildSnackbarCard(this, message);
 
-                    var density = Resources?.DisplayMetrics?.Density ?? 1f;
+                    var screenHeight = Resources?.DisplayMetrics?.HeightPixels ?? 1920;
                     var layoutParams = new WindowManagerLayoutParams(
                         WindowManagerLayoutParams.WrapContent,
                         WindowManagerLayoutParams.WrapContent,
@@ -289,8 +289,8 @@ namespace Screenshot_Organiser.Platforms.Android
                         WindowManagerFlags.NotFocusable | WindowManagerFlags.NotTouchable,
                         Format.Translucent)
                     {
-                        Gravity = GravityFlags.Bottom | GravityFlags.CenterHorizontal,
-                        Y = (int)(72 * density)
+                        Gravity = GravityFlags.Top | GravityFlags.CenterHorizontal,
+                        Y = (int)(screenHeight * 0.025f)
                     };
 
                     _windowManager.AddView(bar, layoutParams);
@@ -343,8 +343,7 @@ namespace Screenshot_Organiser.Platforms.Android
                 File.Copy(screenshotPath, destinationPath, overwrite: true);
                 File.Delete(screenshotPath);
 
-                var folderName = IOPath.GetFileName(destinationFolder);
-                ShowBottomSnackbar($"Moved to {folderName} ✅");
+                ShowBottomSnackbar("Moved");
 
                 System.Diagnostics.Debug.WriteLine($"✅ Screenshot moved: {screenshotPath} → {destinationPath}");
             }
